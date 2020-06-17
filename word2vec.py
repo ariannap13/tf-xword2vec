@@ -9,7 +9,7 @@ class Word2VecModel(object):
   """
 
   def __init__(self, arch, algm, embed_size, batch_size, negatives, power,
-               alpha, min_alpha, add_bias, random_seed):
+               alpha, min_alpha, add_bias, random_seed, optim):
     """Constructor.
 
     Args:
@@ -25,6 +25,7 @@ class Word2VecModel(object):
       add_bias: bool scalar, whether to add bias term to dotproduct 
         between syn0 and syn1 vectors.
       random_seed: int scalar, random_seed.
+      optim: string, optimizer ('GD', 'AG', 'Ftrl', 'Adam').
     """
     self._arch = arch
     self._algm = algm
@@ -36,6 +37,7 @@ class Word2VecModel(object):
     self._min_alpha = min_alpha
     self._add_bias = add_bias
     self._random_seed = random_seed
+    self._optim = optim
 
     self._syn0 = None
 
@@ -61,7 +63,7 @@ class Word2VecModel(object):
     """
     syn0, syn1, biases = self._create_embeddings(len(unigram_counts))
     self._syn0 = syn0
-    with tf.variable_scope(scope, 'Loss', [inputs, labels, syn0, syn1, biases]):
+    with tf.compat.v1.variable_scope(scope, 'Loss', [inputs, labels, syn0, syn1, biases]):
       if self._algm == 'negative_sampling':
         loss = self._negative_sampling_loss(
             unigram_counts, inputs, labels, syn0, syn1, biases)
@@ -86,17 +88,36 @@ class Word2VecModel(object):
     """
     tensor_dict = dataset.get_tensor_dict(filenames)
     inputs, labels = tensor_dict['inputs'], tensor_dict['labels']
-    global_step = tf.train.get_or_create_global_step()
-    learning_rate = tf.maximum(self._alpha * (1 - tensor_dict['progress'][0]) +
+    epoch = tensor_dict['epoch']
+    
+    global_step = tf.compat.v1.train.get_or_create_global_step()
+    
+    # learning rate
+    if self._optim == 'Adam':
+      learning_rate = tf.convert_to_tensor(0.001)
+    else:
+      learning_rate = tf.maximum(self._alpha * (1 - tensor_dict['progress'][0]) +
          self._min_alpha * tensor_dict['progress'][0], self._min_alpha)
 
-    loss = self._build_loss(inputs, labels, dataset.unigram_counts)    
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+    loss = self._build_loss(inputs, labels, dataset.unigram_counts)
+    
+    # optimizer
+    if self._optim == 'Adam':
+      optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate)
+    elif self._optim == 'AdaGrad':
+      optimizer = tf.compat.v1.train.AdagradOptimizer(learning_rate)
+    elif self._optim == 'Ftrl':
+      optimizer = tf.compat.v1.train.FtrlOptimizer(learning_rate)
+    else:
+      optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
+      
     grad_update_op = optimizer.minimize(loss, global_step=global_step)
     
-    to_be_run_dict = {'grad_update_op': grad_update_op, 
+    to_be_run_dict = {'grad_update_op': grad_update_op,  
                       'loss': loss, 
-                      'learning_rate': learning_rate}
+                      'learning_rate': learning_rate,
+                      'progress': tensor_dict['progress'][0],
+                      'epoch': epoch}
     return to_be_run_dict
 
   def _create_embeddings(self, vocab_size, scope=None):
@@ -115,13 +136,15 @@ class Word2VecModel(object):
     """
     syn1_rows = (vocab_size if self._algm == 'negative_sampling' 
                             else vocab_size - 1)
-    with tf.variable_scope(scope, 'Embedding'):
-      syn0 = tf.get_variable('syn0', initializer=tf.random_uniform([vocab_size, 
+    with tf.compat.v1.variable_scope(scope, 'Embedding'):
+      syn0 = tf.compat.v1.get_variable(
+          'syn0', initializer=tf.random.uniform([vocab_size, 
           self._embed_size], -0.5/self._embed_size, 0.5/self._embed_size, 
           seed=self._random_seed))
-      syn1 = tf.get_variable('syn1', initializer=tf.random_uniform([syn1_rows,
+      syn1 = tf.compat.v1.get_variable(
+          'syn1', initializer=tf.random.uniform([syn1_rows,
           self._embed_size], -0.1, 0.1))
-      biases = tf.get_variable('biases', initializer=tf.zeros([syn1_rows]))
+      biases = tf.compat.v1.get_variable('biases', initializer=tf.zeros([syn1_rows]))
     return syn0, syn1, biases
 
   def _negative_sampling_loss(
