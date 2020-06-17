@@ -94,13 +94,9 @@ class Word2VecModel(object):
     
     # learning rate
     if self._optim == 'Adam':
-      learning_rate = tf.convert_to_tensor(0.001)
+      learning_rate = tf.convert_to_tensor(self._min_alpha)
     elif self._optim == 'AdaGrad':
-      learning_rate = tf.convert_to_tensor(0.4)
-    elif self._optim == 'Ftrl':
-      learning_rate = tf.convert_to_tensor(0.4)
-    elif self._optim == 'RMS':
-      learning_rate = tf.convert_to_tensor(0.4)
+      learning_rate = tf.convert_to_tensor(self._alpha)
     else:
       learning_rate = tf.maximum(self._alpha * (1 - tensor_dict['progress'][0]) +
          self._min_alpha * tensor_dict['progress'][0], self._min_alpha)
@@ -114,8 +110,6 @@ class Word2VecModel(object):
       optimizer = tf.compat.v1.train.ProximalAdagradOptimizer(learning_rate)
     elif self._optim == 'Ftrl':
       optimizer = tf.compat.v1.train.FtrlOptimizer(learning_rate)
-    elif self._optim == 'RMS':
-      optimizer = tf.compat.v1.train.RMSPropOptimizer(learning_rate)
     else:
       optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
       
