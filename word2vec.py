@@ -25,7 +25,7 @@ class Word2VecModel(object):
       add_bias: bool scalar, whether to add bias term to dotproduct 
         between syn0 and syn1 vectors.
       random_seed: int scalar, random_seed.
-      optim: string, optimizer ('GD', 'AG', 'Ftrl', 'Adam', 'RMS').
+      optim: string, optimizer ('GD', 'ProxAdaGrad', 'ProxGD', 'Adam').
     """
     self._arch = arch
     self._algm = algm
@@ -95,21 +95,25 @@ class Word2VecModel(object):
     # learning rate
     if self._optim == 'Adam':
       learning_rate = tf.convert_to_tensor(self._min_alpha)
-    elif self._optim == 'AdaGrad':
+    elif self._optim == 'ProxAdaGrad':
+      learning_rate = tf.convert_to_tensor(self._alpha)
+    elif self._optim == 'ProxGD':
       learning_rate = tf.convert_to_tensor(self._alpha)
     else:
-      learning_rate = tf.maximum(self._alpha * (1 - tensor_dict['progress'][0]) +
-         self._min_alpha * tensor_dict['progress'][0], self._min_alpha)
+      learning_rate = tf.maximum(
+                        (self._alpha - self._min_alpha) *
+                        (1 - tensor_dict['progress'][0]) +
+                        (self._min_alpha), self._min_alpha)
 
     loss = self._build_loss(inputs, labels, dataset.unigram_counts)
     
     # optimizer
     if self._optim == 'Adam':
       optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate)
-    elif self._optim == 'AdaGrad':
+    elif self._optim == 'ProxAdaGrad':
       optimizer = tf.compat.v1.train.ProximalAdagradOptimizer(learning_rate)
-    elif self._optim == 'Ftrl':
-      optimizer = tf.compat.v1.train.FtrlOptimizer(learning_rate)
+    elif self._optim == 'ProxGD':
+      optimizer = tf.compat.v1.train.ProximalGradientDescentOptimizer(learning_rate)
     else:
       optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
       
