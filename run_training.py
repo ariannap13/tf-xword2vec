@@ -41,28 +41,28 @@ flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
     '(negative_sampling or hierarchical_softmax).')
 flags.DEFINE_integer('epochs', 5, 'Num of epochs to iterate training data.')
 flags.DEFINE_integer('batch_size', 500, 'Batch size.')
-flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. If > 0, '
-    'the top `max_vocab_size` most frequent words are kept in vocabulary.')
+flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
+                     'If > 0, the top `max_vocab_size` most frequent words'
+                     ' are kept in vocabulary.')
 flags.DEFINE_integer('min_count', 2, 'Words whose counts < `min_count` are not'
-    ' included in the vocabulary.')
+                                     ' included in the vocabulary.')
 flags.DEFINE_float('sample', 0.01, 'Subsampling rate.')
 flags.DEFINE_integer('window_size', 7, 'Num of words on the left or right side' 
-    ' of target word within a window.')
-
+                                       ' of target word within a window.')
 flags.DEFINE_integer('embed_size', 300, 'Length of word vector.')
 flags.DEFINE_integer('negatives', 5, 'Num of negative words to sample.')
 flags.DEFINE_float('power', 0.75, 'Distortion for negative sampling.')
 flags.DEFINE_float('alpha', 0.025, 'Initial learning rate to Gradient Descent.')
 flags.DEFINE_float('min_alpha', 0.001, 'Final learning rate.')
 flags.DEFINE_boolean('add_bias', True, 'Whether to add bias term to dotproduct '
-    'between syn0 and syn1 vectors.')
-
+                                       'between syn0 and syn1 vectors.')
 flags.DEFINE_integer('log_per_steps', 1000, 'Every `log_per_steps` steps to '
-    ' output logs.')
+                                            ' output logs.')
 flags.DEFINE_list('filenames', None, 'Names of comma-separated input text files.')
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
-
-flags.DEFINE_string('optim', 'AdaGrad', 'Optimizer algorithm (GD, Ftrl, Adam, AdaGrad).')
+flags.DEFINE_integer('seed', 7, 'Seed to fix sequence of random values.')
+flags.DEFINE_string('optim', 'GradDescProx', 'Optimization algorithm '
+                                     '(GradDescProx, GradDesc, Adam, AdaGradProx).')
 
 FLAGS = flags.FLAGS
 
@@ -86,7 +86,7 @@ def main(_):
                            alpha=FLAGS.alpha,
                            min_alpha=FLAGS.min_alpha,
                            add_bias=FLAGS.add_bias,
-                           random_seed=0,
+                           random_seed=FLAGS.seed,
                            optim=FLAGS.optim)
   to_be_run_dict = word2vec.train(dataset, FLAGS.filenames)
 
@@ -127,23 +127,27 @@ def main(_):
         print('-------------------- Epoch: ', nepoch)
       
       if nepoch > 1:
-        if step % (FLAGS.log_per_steps / 2) == 0:
-          average_loss /= FLAGS.log_per_steps
-          print('epoch:', nepoch, ' step:', step)
-          print(' average loss:', average_loss)
-          print(' learning rate:', result_dict['learning_rate'])
-          print('------------------------------------')
-          flog.write("\n" + str(step) + "\t" + str(nepoch) \
-                                      + "\t" + str(average_loss))
+        divisor = FLAGS.log_per_steps / 2
+      else:
+        divisor = FLAGS.log_per_steps
 
-          syn0_partial = sess.run(word2vec.syn0)
-          np.save(os.path.join(FLAGS.out_dir, 'embed_' + 
-                               str(nepoch).zfill(2) + "_step_" +
-                               str(step).zfill(6))
-                  , syn0_partial)
-          average_loss = 0.
-          sub_step = 0
-          no_log = False
+      if step % divisor == 0:
+        average_loss /= FLAGS.log_per_steps
+        print('epoch:', nepoch, ' step:', step)
+        print(' average loss:', average_loss)
+        print(' learning rate:', result_dict['learning_rate'])
+        print('------------------------------------')
+        flog.write("\n" + str(step) + "\t" + str(nepoch) \
+                                    + "\t" + str(average_loss))
+
+        syn0_partial = sess.run(word2vec.syn0)
+        np.save(os.path.join(FLAGS.out_dir, 'embed_' + 
+                             str(nepoch).zfill(2) + "_step_" +
+                             str(step).zfill(6))
+                , syn0_partial)
+        average_loss = 0.
+        sub_step = 0
+        no_log = False
       
     if no_log:
       if sub_step > 0:
