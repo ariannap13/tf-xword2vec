@@ -26,7 +26,7 @@ class Word2VecModel(object):
         between syn0 and syn1 vectors.
       random_seed: int scalar, random_seed if equal to zero.
       optim: string, ('GradDesc', 'AdaGradProx', 'GradDescProx', 'Adam').
-      decay: string, polynomial or cosine decay ('poly', 'cos')
+      decay: string, polynomial, cosine decay, linear ('poly', 'cos', 'lin', 'no')
     """
     self._arch = arch
     self._algm = algm
@@ -108,21 +108,26 @@ class Word2VecModel(object):
         learning_rate = tf.maximum(self._alpha * 0.5 * 
                                    (1 + tf.cos(np.pi * rate_progress)),
                                    self._min_alpha)
+      elif self._decay == 'lin':
+        learning_rate = tf.maximum(self._alpha * (1 - rate_progress),
+                                   self._min_alpha)
       else:
         learning_rate = self._alpha      
+        
+    lr = tf.cast(learning_rate, tf.float32) 
 
     loss = self._build_loss(inputs, labels, dataset.unigram_counts)
     
     # optimizer
     if self._optim == 'Adam':
-      optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate)
+      optimizer = tf.compat.v1.train.AdamOptimizer(lr)
     elif self._optim == 'AdaGradProx':
-      optimizer = tf.compat.v1.train.ProximalAdagradOptimizer(learning_rate)
+      optimizer = tf.compat.v1.train.ProximalAdagradOptimizer(lr)
     elif self._optim == 'GradDescProx':
-      optimizer = tf.compat.v1.train.ProximalGradientDescentOptimizer(learning_rate)
+      optimizer = tf.compat.v1.train.ProximalGradientDescentOptimizer(lr)
     else:
       # with decay
-      optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
+      optimizer = tf.compat.v1.train.GradientDescentOptimizer(lr)
       
     grad_update_op = optimizer.minimize(
                         loss,
@@ -244,7 +249,7 @@ class Word2VecModel(object):
         logits += tf.gather(biases, points)
 
       loss.append(tf.nn.sigmoid_cross_entropy_with_logits(
-          labels=tf.cast(codes, tf.float64), logits=logits))
+          labels=tf.cast(codes, tf.float32), logits=logits))
     loss = tf.concat(loss, axis=0)
     return loss
 
