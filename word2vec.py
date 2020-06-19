@@ -102,7 +102,7 @@ class Word2VecModel(object):
     
     # optimizer
     if self._optim == 'Adam':
-      optimizer = tf.compat.v1.train.AdamOptimizer(self._min_alpha)
+      optimizer = tf.compat.v1.train.AdamOptimizer(0.001)
     elif self._optim == 'AdaGradProx':
       optimizer = tf.train.ProximalAdagradOptimizer(self._alpha)
     elif self._optim == 'GradDescProx':
