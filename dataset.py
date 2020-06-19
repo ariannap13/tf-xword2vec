@@ -288,7 +288,7 @@ def get_word_indices(sent, table_words):
     indices: rank-1 int tensor, the word indices within a sentence.
   """
   words = tf.string_split([sent]).values
-  indices = tf.to_int32(table_words.lookup(words))
+  indices = tf.cast(table_words.lookup(words), tf.int32)
   return indices
 
 
@@ -381,6 +381,6 @@ def generate_instances(indices, arch, window_size, codes_points=None):
                                   per_target_fn, 
                                   [0, init_array],
                                       back_prop=False)
-  instances = tf.cast(result_array.concat(), tf.int64)
+  instances = tf.cast(result_array.concat(), tf.int32)
   return instances
 
