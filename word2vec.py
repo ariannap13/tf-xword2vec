@@ -93,33 +93,26 @@ class Word2VecModel(object):
     global_step = tf.compat.v1.train.get_or_create_global_step()
     
     # learning rate
-    if self._optim == 'Adam':
-      learning_rate = tf.convert_to_tensor(self._min_alpha)
-    elif self._optim == 'AdaGradProx':
-      learning_rate = tf.convert_to_tensor(self._alpha)
-    elif self._optim == 'GradDescProx':
-      learning_rate = tf.convert_to_tensor(self._alpha)
-    else:
-      learning_rate = tf.maximum(
-                        (self._alpha - self._min_alpha) *
-                        (1 - tensor_dict['progress'][0]) +
-                        (self._min_alpha), self._min_alpha)
+    learning_rate = tf.maximum(
+                      (self._alpha - self._min_alpha) *
+                      (1 - tf.to_float(tensor_dict['progress'][0])) +
+                      (self._min_alpha), self._min_alpha)
 
     loss = self._build_loss(inputs, labels, dataset.unigram_counts)
     
     # optimizer
     if self._optim == 'Adam':
-      optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate)
+      optimizer = tf.compat.v1.train.AdamOptimizer(0.01)
     elif self._optim == 'AdaGradProx':
-      optimizer = tf.compat.v1.train.ProximalAdagradOptimizer(
-                        learning_rate, 
-                        l1_regularization_strength=0.001,
-                        l2_regularization_strength=0.001)
+      optimizer = tf.train.ProximalAdagradOptimizer(
+                        learning_rate,
+                        l1_regularization_strength=0.01,
+                        l2_regularization_strength=0.0)
     elif self._optim == 'GradDescProx':
-      optimizer = tf.compat.v1.train.ProximalGradientDescentOptimizer(
-                        learning_rate, 
-                        l1_regularization_strength=0.001,
-                        l2_regularization_strength=0.001)
+      optimizer = tf.train.ProximalGradientDescentOptimizer(
+                        learning_rate,
+                        l1_regularization_strength=0.01,
+                        l2_regularization_strength=0.0)
     else:
       optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
       
@@ -157,7 +150,8 @@ class Word2VecModel(object):
       syn1 = tf.compat.v1.get_variable(
           'syn1', initializer=tf.random.uniform([syn1_rows,
           self._embed_size], -0.1, 0.1))
-      biases = tf.compat.v1.get_variable('biases', initializer=tf.zeros([syn1_rows]))
+      biases = tf.compat.v1.get_variable('biases',
+                                         initializer=tf.zeros([syn1_rows]))
     return syn0, syn1, biases
 
   def _negative_sampling_loss(
