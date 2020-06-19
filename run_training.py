@@ -23,10 +23,10 @@ from word2vec import Word2VecModel
 
 flags = tf.app.flags
 
-flags.DEFINE_string('arch', 'skip_gram', 'Architecture (skip_gram or cbow).')
-flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
+flags.DEFINE_string('arch', 'cbow', 'Architecture (skip_gram or cbow).')
+flags.DEFINE_string('algm', 'hierarchical_softmax', 'Training algorithm '
     '(negative_sampling or hierarchical_softmax).')
-flags.DEFINE_integer('epochs', 20, 'Num of epochs to iterate training data.')
+flags.DEFINE_integer('epochs', 15, 'Num of epochs to iterate training data.')
 flags.DEFINE_integer('batch_size', 256, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
                      'If > 0, the top `max_vocab_size` most frequent words'
@@ -34,23 +34,24 @@ flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
 flags.DEFINE_integer('min_count', 2, 'Words whose counts < `min_count` are not'
                                      ' included in the vocabulary.')
 flags.DEFINE_float('sample', 0.01, 'Subsampling rate.')
-flags.DEFINE_integer('window_size', 7, 'Num of words on the left or right side' 
+flags.DEFINE_integer('window_size', 6, 'Num of words on the left or right side' 
                                        ' of target word within a window.')
-flags.DEFINE_integer('embed_size', 300, 'Length of word vector.')
-flags.DEFINE_integer('negatives', 3, 'Num of negative words to sample.')
+flags.DEFINE_integer('embed_size', 200, 'Length of word vector.')
+flags.DEFINE_integer('negatives', 5, 'Num of negative words to sample.')
 flags.DEFINE_float('power', 0.75, 'Distortion for negative sampling.')
-flags.DEFINE_float('alpha', 0.05, 'Initial learning rate to Gradient Descent.')
-flags.DEFINE_float('min_alpha', 0.0001, 'Final learning rate.')
+flags.DEFINE_float('alpha', 0.025, 'Initial learning rate to Gradient Descent.')
+flags.DEFINE_float('min_alpha', 0.001, 'Final learning rate.')
 flags.DEFINE_boolean('add_bias', True, 'Whether to add bias term to dotproduct'
                                        ' between syn0 and syn1 vectors.')
 flags.DEFINE_integer('log_per_steps', 1000, 'Every `log_per_steps` steps to '
                                             ' output logs.')
 flags.DEFINE_list('filenames', None, 'Names of comma-separated input text files.')
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
-flags.DEFINE_integer('seed', 90, 'Seed to fix sequence of random values.')
-flags.DEFINE_string('optim', 'GradDescProx', 'Optimization algorithm '
+flags.DEFINE_integer('seed', 777, 'Seed to fix sequence of random values.')
+flags.DEFINE_string('optim', 'GradDesc', 'Optimization algorithm '
                             '(GradDescProx, GradDesc, Adam, AdaGradProx).')
-flags.DEFINE_boolean('less_first', False, 'First epoch with less log.')
+flags.DEFINE_string('decay', 'cos', 'Polynomial (poly), cosine (cos) or (no).')
+flags.DEFINE_boolean('less_first', True, 'First epoch with less log.')
 
 FLAGS = flags.FLAGS
 
@@ -89,7 +90,8 @@ def main(_):
                            min_alpha=FLAGS.min_alpha,
                            add_bias=FLAGS.add_bias,
                            random_seed=FLAGS.seed,
-                           optim=FLAGS.optim)
+                           optim=FLAGS.optim,
+                           decay=FLAGS.decay)
   to_be_run_dict = word2vec.train(dataset, FLAGS.filenames)
 
   with tf.compat.v1.Session() as sess:
@@ -173,7 +175,7 @@ def main(_):
 
     with open(os.path.join(FLAGS.out_dir, 'vocab.txt'), 'w', encoding="utf-8") as fid:
       for c in dataset.unigram_counts:
-        fid.write(c + '\n')       
+        fid.write(str(c) + '\n')       
       fid.close()
       
     sess.close()
