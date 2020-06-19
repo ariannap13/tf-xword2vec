@@ -118,9 +118,10 @@ class Word2VecModel(object):
       # with decay
       optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
       
-    grad_update_op = optimizer.minimize(loss,
-                                        global_step=global_step,
-                                        gate_gradients=tf.train.Optimizer.GATE_GRAPH)
+    grad_update_op = optimizer.minimize(
+                        loss,
+                        global_step=global_step,
+                        gate_gradients=tf.compat.v1.train.Optimizer.GATE_NONE)
     
     to_be_run_dict = {'grad_update_op': grad_update_op,  
                       'loss': loss, 
