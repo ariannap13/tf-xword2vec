@@ -90,7 +90,7 @@ class Word2VecModel(object):
     inputs, labels = tensor_dict['inputs'], tensor_dict['labels']
     epoch = tensor_dict['epoch']
     
-    global_step = tf.compat.v1.train.get_or_create_global_step()
+    global_step = tf.Variable(0, trainable=False)
     
     # learning rate
     learning_rate = tf.maximum(
@@ -102,17 +102,11 @@ class Word2VecModel(object):
     
     # optimizer
     if self._optim == 'Adam':
-      optimizer = tf.compat.v1.train.AdamOptimizer(0.01)
+      optimizer = tf.compat.v1.train.AdamOptimizer(self._min_alpha)
     elif self._optim == 'AdaGradProx':
-      optimizer = tf.train.ProximalAdagradOptimizer(
-                        learning_rate,
-                        l1_regularization_strength=0.01,
-                        l2_regularization_strength=0.0)
+      optimizer = tf.train.ProximalAdagradOptimizer(self._alpha)
     elif self._optim == 'GradDescProx':
-      optimizer = tf.train.ProximalGradientDescentOptimizer(
-                        learning_rate,
-                        l1_regularization_strength=0.01,
-                        l2_regularization_strength=0.0)
+      optimizer = tf.train.ProximalGradientDescentOptimizer(self._alpha)
     else:
       optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
       
@@ -121,8 +115,8 @@ class Word2VecModel(object):
     to_be_run_dict = {'grad_update_op': grad_update_op,  
                       'loss': loss, 
                       'learning_rate': learning_rate,
-                      'progress': tensor_dict['progress'][0],
-                      'epoch': epoch}
+                      'progress': tf.to_float(tensor_dict['progress'][0]),
+                      'epoch': tf.to_int32(epoch)}
     return to_be_run_dict
 
   def _create_embeddings(self, vocab_size, scope=None):
@@ -143,14 +137,14 @@ class Word2VecModel(object):
                             else vocab_size - 1)
     with tf.compat.v1.variable_scope(scope, 'Embedding'):
       syn0 = tf.compat.v1.get_variable(
-          'syn0', initializer=tf.random.uniform(
+          'syn0', initializer=tf.random.normal(
                         [vocab_size, self._embed_size],
-                        -0.5/self._embed_size, 0.5/self._embed_size,
+                        -1/self._embed_size, 1/self._embed_size,
                         seed=self._random_seed))
       syn1 = tf.compat.v1.get_variable(
           'syn1', initializer=tf.random.uniform([syn1_rows,
           self._embed_size], -0.1, 0.1))
-      biases = tf.compat.v1.get_variable('biases',
+      biases = tf.compat.v1.get_variable('biases', 
                                          initializer=tf.zeros([syn1_rows]))
     return syn0, syn1, biases
 
