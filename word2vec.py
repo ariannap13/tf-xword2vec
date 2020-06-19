@@ -1,7 +1,6 @@
 import heapq
 
 import numpy as np
-import math
 import tensorflow as tf
 
 
@@ -95,7 +94,7 @@ class Word2VecModel(object):
     
     # not used. using progress rate
     # global_step = tf.Variable(0, trainable=False)
-    rate_progress = tf.cast(tensor_dict['progress'][0], tf.float64) 
+    rate_progress = tensor_dict['progress'][0] 
     
     # learning rate
     if self._optim == 'Adam':
@@ -107,7 +106,7 @@ class Word2VecModel(object):
                         (self._min_alpha), self._min_alpha)
       elif self._decay == 'cos':
         learning_rate = tf.maximum(self._alpha * 0.5 * 
-                                   (1 + math.cos(math.pi * rate_progress)),
+                                   (1 + tf.cos(np.pi * rate_progress)),
                                    self._min_alpha)
       else:
         learning_rate = self._alpha      
@@ -245,7 +244,7 @@ class Word2VecModel(object):
         logits += tf.gather(biases, points)
 
       loss.append(tf.nn.sigmoid_cross_entropy_with_logits(
-          labels=tf.cast(codes), logits=logits), tf.float64)
+          labels=tf.cast(codes, tf.float64), logits=logits))
     loss = tf.concat(loss, axis=0)
     return loss
 
