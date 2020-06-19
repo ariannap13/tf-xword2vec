@@ -179,17 +179,17 @@ class Word2VecDataset(object):
       if self._algm == 'negative_sampling':
         tensor.set_shape([self._batch_size, 2])
       else:
-        tensor.set_shape([self._batch_size, 2*self._max_depth+2])
+        tensor.set_shape([self._batch_size, 2 * self._max_depth + 2])
       inputs = tensor[:, :1]
       labels = tensor[:, 1:]
     else:
       if self._algm == 'negative_sampling':
-        tensor.set_shape([self._batch_size, 2*self._window_size+2])
+        tensor.set_shape([self._batch_size, 2 * self._window_size + 2])
       else:
         tensor.set_shape([self._batch_size, 
-            2*self._window_size+2*self._max_depth+2])
-      inputs = tensor[:, :2*self._window_size+1]
-      labels = tensor[:, 2*self._window_size+1:]
+            2 * self._window_size + 2 * self._max_depth+2])
+      inputs = tensor[:, : 2 * self._window_size + 1]
+      labels = tensor[:, 2 * self._window_size + 1:]
     return inputs, labels
 
   def get_tensor_dict(self, filenames):
