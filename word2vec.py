@@ -95,10 +95,6 @@ class Word2VecModel(object):
     # learning rate
     if self._optim == 'Adam':
       learning_rate = tf.convert_to_tensor(self._min_alpha)
-    elif self._optim == 'AdaGradProx':
-      learning_rate = tf.convert_to_tensor(self._alpha)
-    elif self._optim == 'GradDescProx':
-      learning_rate = tf.convert_to_tensor(self._alpha)
     else:
       learning_rate = tf.maximum(
                         (self._alpha - self._min_alpha) *
@@ -112,14 +108,10 @@ class Word2VecModel(object):
       optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate)
     elif self._optim == 'AdaGradProx':
       optimizer = tf.compat.v1.train.ProximalAdagradOptimizer(
-                        learning_rate, 
-                        l1_regularization_strength=0.001,
-                        l2_regularization_strength=0.001)
+                        learning_rate)
     elif self._optim == 'GradDescProx':
       optimizer = tf.compat.v1.train.ProximalGradientDescentOptimizer(
-                        learning_rate, 
-                        l1_regularization_strength=0.001,
-                        l2_regularization_strength=0.001)
+                        learning_rate)
     else:
       optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
       
