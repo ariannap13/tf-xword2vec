@@ -1,6 +1,7 @@
 import heapq
 
 import numpy as np
+import math
 import tensorflow as tf
 
 
@@ -9,7 +10,7 @@ class Word2VecModel(object):
   """
 
   def __init__(self, arch, algm, embed_size, batch_size, negatives, power,
-               alpha, min_alpha, add_bias, random_seed, optim):
+               alpha, min_alpha, add_bias, random_seed, optim, decay):
     """Constructor.
 
     Args:
@@ -25,7 +26,8 @@ class Word2VecModel(object):
       add_bias: bool scalar, whether to add bias term to dotproduct 
         between syn0 and syn1 vectors.
       random_seed: int scalar, random_seed if equal to zero.
-      optim: string, optimizer ('GD', 'ProxAdaGrad', 'ProxGD', 'Adam').
+      optim: string, ('GradDesc', 'AdaGradProx', 'GradDescProx', 'Adam').
+      decay: string, polynomial or cosine decay ('poly', 'cos')
     """
     self._arch = arch
     self._algm = algm
@@ -38,7 +40,8 @@ class Word2VecModel(object):
     self._add_bias = add_bias
     self._random_seed = random_seed
     self._optim = optim
-
+    self._decay = decay
+    
     self._syn0 = None
 
   @property
@@ -90,20 +93,24 @@ class Word2VecModel(object):
     inputs, labels = tensor_dict['inputs'], tensor_dict['labels']
     epoch = tensor_dict['epoch']
     
-    global_step = tf.Variable(0, trainable=False)
+    # not used. using progress rate
+    # global_step = tf.Variable(0, trainable=False)
+    rate_progress = tf.cast(tensor_dict['progress'][0], tf.float64) 
     
     # learning rate
     if self._optim == 'Adam':
-      learning_rate = tf.convert_to_tensor(0.001)
-    elif self._optim == 'AdaGradProx':
-      learning_rate = tf.convert_to_tensor(self._alpha)
-    elif self._optim == 'GradDescProx':
-      learning_rate = tf.convert_to_tensor(self._alpha)
+      learning_rate = 0.001
     else:
-      learning_rate = tf.maximum(
-                      (self._alpha - self._min_alpha) *
-                      (1 - tf.to_float(tensor_dict['progress'][0])) +
-                      (self._min_alpha), self._min_alpha)
+      if self._decay == 'poly':
+        learning_rate = tf.maximum(
+                        (self._alpha - self._min_alpha) * (1 - rate_progress) + 
+                        (self._min_alpha), self._min_alpha)
+      elif self._decay == 'cos':
+        learning_rate = tf.maximum(self._alpha * 0.5 * 
+                                   (1 + math.cos(math.pi * rate_progress)),
+                                   self._min_alpha)
+      else:
+        learning_rate = self._alpha      
 
     loss = self._build_loss(inputs, labels, dataset.unigram_counts)
     
@@ -120,8 +127,7 @@ class Word2VecModel(object):
       
     grad_update_op = optimizer.minimize(
                         loss,
-                        global_step=global_step,
-                        gate_gradients=tf.compat.v1.train.Optimizer.GATE_NONE)
+                        gate_gradients=tf.compat.v1.train.Optimizer.GATE_OP)
     
     to_be_run_dict = {'grad_update_op': grad_update_op,  
                       'loss': loss, 
