@@ -24,7 +24,7 @@ class Word2VecModel(object):
       min_alpha: float scalar, final learning rate.
       add_bias: bool scalar, whether to add bias term to dotproduct 
         between syn0 and syn1 vectors.
-      random_seed: int scalar, random_seed.
+      random_seed: int scalar, random_seed if equal to zero.
       optim: string, optimizer ('GD', 'ProxAdaGrad', 'ProxGD', 'Adam').
     """
     self._arch = arch
