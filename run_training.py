@@ -20,51 +20,53 @@ curr_path = os.path.dirname(os.path.abspath(__file__))
 from dataset import Word2VecDataset
 from word2vec import Word2VecModel
 
-def del_all_flags(FLAGS):
-    flags_dict = FLAGS._flags()
-    keys_list = [keys for keys in flags_dict]
-    for keys in keys_list:
-        FLAGS.__delattr__(keys)
-        
-def time_sufix(extension=".log"):
-    from time import strftime
-    sufix = "_" + strftime("%Y-%m-%d_%H-%M")
-    sufix = sufix + extension
-    return sufix
-  
-# del_all_flags(tf.flags.FLAGS)
 
 flags = tf.app.flags
 
 flags.DEFINE_string('arch', 'skip_gram', 'Architecture (skip_gram or cbow).')
 flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
     '(negative_sampling or hierarchical_softmax).')
-flags.DEFINE_integer('epochs', 5, 'Num of epochs to iterate training data.')
-flags.DEFINE_integer('batch_size', 500, 'Batch size.')
+flags.DEFINE_integer('epochs', 20, 'Num of epochs to iterate training data.')
+flags.DEFINE_integer('batch_size', 1024, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
                      'If > 0, the top `max_vocab_size` most frequent words'
                      ' are kept in vocabulary.')
 flags.DEFINE_integer('min_count', 2, 'Words whose counts < `min_count` are not'
                                      ' included in the vocabulary.')
 flags.DEFINE_float('sample', 0.01, 'Subsampling rate.')
-flags.DEFINE_integer('window_size', 7, 'Num of words on the left or right side' 
+flags.DEFINE_integer('window_size', 6, 'Num of words on the left or right side' 
                                        ' of target word within a window.')
 flags.DEFINE_integer('embed_size', 300, 'Length of word vector.')
 flags.DEFINE_integer('negatives', 5, 'Num of negative words to sample.')
 flags.DEFINE_float('power', 0.75, 'Distortion for negative sampling.')
-flags.DEFINE_float('alpha', 0.025, 'Initial learning rate to Gradient Descent.')
+flags.DEFINE_float('alpha', 0.5, 'Initial learning rate to Gradient Descent.')
 flags.DEFINE_float('min_alpha', 0.001, 'Final learning rate.')
-flags.DEFINE_boolean('add_bias', True, 'Whether to add bias term to dotproduct '
-                                       'between syn0 and syn1 vectors.')
+flags.DEFINE_boolean('add_bias', True, 'Whether to add bias term to dotproduct'
+                                       ' between syn0 and syn1 vectors.')
 flags.DEFINE_integer('log_per_steps', 1000, 'Every `log_per_steps` steps to '
                                             ' output logs.')
 flags.DEFINE_list('filenames', None, 'Names of comma-separated input text files.')
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
-flags.DEFINE_integer('seed', 7, 'Seed to fix sequence of random values.')
+flags.DEFINE_integer('seed', 90, 'Seed to fix sequence of random values.')
 flags.DEFINE_string('optim', 'GradDescProx', 'Optimization algorithm '
-                                     '(GradDescProx, GradDesc, Adam, AdaGradProx).')
+                            '(GradDescProx, GradDesc, Adam, AdaGradProx).')
+flags.DEFINE_boolean('less_first', False, 'First epoch with less log.')
 
 FLAGS = flags.FLAGS
+
+def del_all_flags(FLAGS):
+    flags_dict = FLAGS._flags()
+    keys_list = [keys for keys in flags_dict]
+    for keys in keys_list:
+        FLAGS.__delattr__(keys)
+
+
+def time_sufix(extension=".log"):
+    from time import strftime
+    sufix = "_" + strftime("%Y-%m-%d_%H-%M")
+    sufix = sufix + extension
+    return sufix
+
 
 def main(_):
   dataset = Word2VecDataset(arch=FLAGS.arch,
@@ -127,7 +129,8 @@ def main(_):
         print('-------------------- Epoch: ', nepoch)
       
       if nepoch > 1:
-        divisor = FLAGS.log_per_steps / 2
+        if FLAGS.less_first:
+          divisor = FLAGS.log_per_steps / 2
       else:
         divisor = FLAGS.log_per_steps
 
@@ -161,11 +164,16 @@ def main(_):
     flog.close()
     
     syn0_final = sess.run(word2vec.syn0)
-    np.save(os.path.join(FLAGS.out_dir, 'embed'), syn0_final)
-    
+    np.save(os.path.join(FLAGS.out_dir, 'embed_final'), syn0_final)
+
     with open(os.path.join(FLAGS.out_dir, 'vocab.txt'), 'w', encoding="utf-8") as fid:
       for w in dataset.table_words:
         fid.write(w + '\n')       
+      fid.close()
+
+    with open(os.path.join(FLAGS.out_dir, 'vocab.txt'), 'w', encoding="utf-8") as fid:
+      for c in dataset.unigram_counts:
+        fid.write(c + '\n')       
       fid.close()
       
     sess.close()
