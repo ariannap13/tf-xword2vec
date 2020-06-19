@@ -108,6 +108,7 @@ class Word2VecModel(object):
     elif self._optim == 'GradDescProx':
       optimizer = tf.train.ProximalGradientDescentOptimizer(self._alpha)
     else:
+      # with decay
       optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
       
     grad_update_op = optimizer.minimize(loss, global_step=global_step)
