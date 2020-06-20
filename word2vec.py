@@ -93,7 +93,7 @@ class Word2VecModel(object):
     epoch = tensor_dict['epoch']
     
     # not used. using progress rate
-    # global_step = tf.Variable(0, trainable=False)
+    global_step = tf.train.get_or_create_global_step()
     rate_progress = tensor_dict['progress'][0] 
     
     # learning rate
@@ -129,13 +129,13 @@ class Word2VecModel(object):
       # with decay
       optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
       
-    grad_update_op = optimizer.minimize(loss)
+    grad_update_op = optimizer.minimize(loss, global_step=global_step)
     
     to_be_run_dict = {'grad_update_op': grad_update_op,  
                       'loss': loss, 
                       'learning_rate': learning_rate,
                       'progress': tf.cast(tensor_dict['progress'][0], tf.float32),
-                      'epoch': tf.cast(epoch, tf.int32)}
+                      'epoch': tf.cast(epoch[0], tf.int32)}
     return to_be_run_dict
 
   def _create_embeddings(self, vocab_size, scope=None):
@@ -187,7 +187,7 @@ class Word2VecModel(object):
       loss: float tensor of shape [batch_size, sample_size + 1].
     """
     sampled_values = tf.compat.v1.nn.fixed_unigram_candidate_sampler(
-        true_classes=tf.expand_dims(labels, 1),
+        true_classes=tf.expand_dims(tf.cast(labels, dtype=tf.int64), 1),
         num_true=1,
         num_sampled=self._batch_size*self._negatives,
         unique=True,
@@ -246,8 +246,10 @@ class Word2VecModel(object):
       if self._add_bias:
         logits += tf.gather(biases, points)
 
+      # loss.append(tf.nn.sigmoid_cross_entropy_with_logits(
+      #     labels=tf.cast(codes, tf.float64), logits=logits)) # 64
       loss.append(tf.nn.sigmoid_cross_entropy_with_logits(
-          labels=tf.cast(codes, tf.float64), logits=logits)) # 64
+           labels=tf.to_float(codes), logits=logits))
     loss = tf.concat(loss, axis=0)
     return loss
 
