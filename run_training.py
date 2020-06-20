@@ -12,7 +12,6 @@ vocabulary saved to /PATH/TO/OUT_DIR/vocab.txt
 """
 import os
 import numpy as np
-import pandas as pd
 import tensorflow as tf
 
 curr_path = os.path.dirname(os.path.abspath(__file__))
@@ -48,7 +47,7 @@ flags.DEFINE_integer('log_per_steps', 1000, 'Every `log_per_steps` steps to '
                                             ' output logs.')
 flags.DEFINE_list('filenames', None, 'Names of comma-separated input text files.')
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
-flags.DEFINE_integer('seed', 0, 'Seed to fix sequence of random values.')
+flags.DEFINE_integer('seed', 777, 'Seed to fix sequence of random values.')
 flags.DEFINE_string('optim', 'Adam', 'Optimization algorithm '
                             '(GradDescProx, GradDesc, Adam, AdaGradProx).')
 flags.DEFINE_string('decay', 'no', 'Polynomial (poly), cosine (cos) or (no).')
@@ -62,14 +61,40 @@ def del_all_flags(FLAGS):
     for keys in keys_list:
         FLAGS.__delattr__(keys)
 
-
 def time_sufix(extension=".log"):
     from time import strftime
     sufix = "_" + strftime("%Y-%m-%d_%H-%M")
     sufix = sufix + extension
     return sufix
 
+def remove_last_empty(arq):
+  with open(arq, encoding='utf-8') as f_input:
+    data = f_input.read().rstrip('\n')
+  with open(arq, 'w', encoding='utf-8') as f_output:    
+    f_output.write(data)
 
+def save_embed_proj(array_embed, list_vocab, path_embed):
+  import pandas as pd
+  # create dataframe
+  df_embed = pd.DataFrame(array_embed, index=list_vocab)
+  # save it in HDF5
+  store = pd.HDFStore(os.path.join(FLAGS.out_dir, 'embeddings.h5'))
+  store['df_embed'] = df_embed
+  store.close()
+  # save vector to Google project, for instance
+  df_embed.to_csv(os.path.join(path_embed, 'project_embed.vec'),
+                  sep='\t', header=False, index=False)
+  # remove last blank line in vector file
+  remove_last_empty(os.path.join(path_embed, 'project_embed.vec'))
+  # create label file
+  with open(os.path.join(FLAGS.out_dir, 'project_embed.tsv'), 'w',
+       encoding="utf-8") as fw:
+    fw.write('word')
+    for w in list_vocab:
+      fw.write('\n' + w)
+    fw.close()
+
+# ================== main ================== 
 def main(_):
   dataset = Word2VecDataset(arch=FLAGS.arch,
                             algm=FLAGS.algm,
@@ -134,6 +159,7 @@ def main(_):
         syn0_partial = sess.run(word2vec.syn0)
         np.save(os.path.join(FLAGS.out_dir, 'embed_' + 
                              str(op_epoch).zfill(2)), syn0_partial)
+        del syn0_partial
         print('-------------------- Epoch: ', op_epoch)
         print(' average loss:', average_loss / sub_step)
         print(' learning rate:', op_lr)
@@ -176,6 +202,7 @@ def main(_):
           np.save(os.path.join(FLAGS.out_dir, 'embed_' +
                                str(op_epoch).zfill(2) + "_step_" +
                                str(step).zfill(6)), syn0_partial)
+          del syn0_partial
           average_loss = 0.
           sub_step = 0
           no_log = False
@@ -195,22 +222,8 @@ def main(_):
     syn0_final = sess.run(word2vec.syn0)
     np.save(os.path.join(FLAGS.out_dir, 'embed_final'), syn0_final)
 
-    df_embeddings = pd.DataFrame(syn0_final, index = list_vocab)
-    store = pd.HDFStore(os.path.join(FLAGS.out_dir, 'store.h5'))
-    store['df'] = df_embeddings
-    store.close()
+    save_embed_proj(syn0_final, list_vocab, FLAGS.out_dir)
     
-    df_embeddings.to_csv(
-                  os.path.join(FLAGS.out_dir, 'df_embeddings.vec'), sep='\t',
-                               header=False, index=False)
-    
-    with open(os.path.join(FLAGS.out_dir, 'df_embeddings.tsv'), 'w',
-         encoding="utf-8") as fw:
-      fw.write('word')
-      for w in list_vocab:
-        fw.write('\n' + w)
-      fw.close()
-
     sess.close()
     
   print('Word embeddings saved to', os.path.join(FLAGS.out_dir, 'embed.npy'))

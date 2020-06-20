@@ -9,6 +9,7 @@ from functools import partial
 
 OOV_ID = -1
 
+
 class Word2VecDataset(object):
   """Dataset for generating matrices holding word indices to train Word2Vec 
   models.
