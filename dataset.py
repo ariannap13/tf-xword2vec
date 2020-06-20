@@ -383,9 +383,7 @@ def generate_instances(indices, arch, window_size, codes_points=None):
   _, result_array = tf.while_loop(lambda i, ta: i < size,
                                   per_target_fn, 
                                   [0, init_array], back_prop=False)
-<<<<<<< HEAD
+
   instances = tf.cast(result_array.concat(), tf.int64)  # 64
-=======
-  instances = tf.cast(result_array.concat(), tf.int32)
->>>>>>> 82f9427df8f6ea96104eef65e7d0808d82569193
+
   return instances
