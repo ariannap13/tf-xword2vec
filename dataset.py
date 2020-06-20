@@ -246,12 +246,13 @@ class Word2VecDataset(object):
         (get_word_indices(sent, table_words), progress, epoch))
     dataset = dataset.map(lambda indices, progress, epoch: 
         (subsample(indices, keep_probs), progress, epoch))
+      
     dataset = dataset.filter(lambda indices, progress, epoch: 
         tf.greater(tf.size(indices), 1))
 
     dataset = dataset.map(lambda indices, progress, epoch: (
-      generate_instances(
-        indices, self._arch, self._window_size, codes_points), progress, epoch))
+      generate_instances(indices, self._arch, self._window_size, codes_points),
+                         progress, epoch))
     
     dataset = dataset.map(lambda instances, progress, epoch: (
         instances, tf.fill(tf.shape(instances)[:1], progress),
@@ -259,11 +260,13 @@ class Word2VecDataset(object):
 
     dataset = dataset.flat_map(lambda instances, progress, epoch: 
         tf.data.Dataset.from_tensor_slices((instances, progress, epoch)))
+      
     dataset = dataset.batch(self._batch_size, drop_remainder=True)
     
     iterator = tf.compat.v1.data.make_initializable_iterator(dataset)
     self._iterator_initializer = iterator.initializer
     tensor, progress, epoch = iterator.get_next()
+    
     progress.set_shape([self._batch_size])
     epoch.set_shape([self._batch_size])
 
@@ -288,7 +291,7 @@ def get_word_indices(sent, table_words):
     indices: rank-1 int tensor, the word indices within a sentence.
   """
   words = tf.string_split([sent]).values
-  indices = tf.cast(table_words.lookup(words), tf.int32)
+  indices = tf.cast(table_words.lookup(words), tf.int32) # 32
   return indices
 
 
@@ -379,8 +382,6 @@ def generate_instances(indices, arch, window_size, codes_points=None):
   init_array = tf.TensorArray(tf.int32, size=size, infer_shape=False)
   _, result_array = tf.while_loop(lambda i, ta: i < size,
                                   per_target_fn, 
-                                  [0, init_array],
-                                      back_prop=False)
-  instances = tf.cast(result_array.concat(), tf.int32)
+                                  [0, init_array], back_prop=False)
+  instances = tf.cast(result_array.concat(), tf.int64)  # 64
   return instances
-
