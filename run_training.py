@@ -24,10 +24,10 @@ from word2vec import Word2VecModel
 flags = tf.app.flags
 
 flags.DEFINE_string('arch', 'skip_gram', 'Architecture (skip_gram or cbow).')
-flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
+flags.DEFINE_string('algm', 'hierarchical_softmax', 'Training algorithm '
     '(negative_sampling or hierarchical_softmax).')
 flags.DEFINE_integer('epochs', 20, 'Num of epochs to iterate training data.')
-flags.DEFINE_integer('batch_size', 200, 'Batch size.')
+flags.DEFINE_integer('batch_size', 256, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
                      'If > 0, the top `max_vocab_size` most frequent words'
                      ' are kept in vocabulary.')
@@ -36,11 +36,11 @@ flags.DEFINE_integer('min_count', 2, 'Words whose counts < `min_count` are not'
 flags.DEFINE_float('sample', 0.01, 'Subsampling rate.')
 flags.DEFINE_integer('window_size', 6, 'Num of words on the left or right side' 
                                        ' of target word within a window.')
-flags.DEFINE_integer('embed_size', 100, 'Length of word vector.')
+flags.DEFINE_integer('embed_size', 200, 'Length of word vector.')
 flags.DEFINE_integer('negatives', 5, 'Num of negative words to sample.')
 flags.DEFINE_float('power', 0.75, 'Distortion for negative sampling.')
-flags.DEFINE_float('alpha', 0.050, 'Initial learning rate to Gradient Descent.')
-flags.DEFINE_float('min_alpha', 0.002, 'Final learning rate.')
+flags.DEFINE_float('alpha', 0.040, 'Initial learning rate to Gradient Descent.')
+flags.DEFINE_float('min_alpha', 0.004, 'Final learning rate.')
 flags.DEFINE_boolean('add_bias', True, 'Whether to add bias term to dotproduct'
                                        ' between syn0 and syn1 vectors.')
 flags.DEFINE_integer('log_per_steps', 1000, 'Every `log_per_steps` steps to '
@@ -48,7 +48,7 @@ flags.DEFINE_integer('log_per_steps', 1000, 'Every `log_per_steps` steps to '
 flags.DEFINE_list('filenames', None, 'Names of comma-separated input text files.')
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
 flags.DEFINE_integer('seed', 777, 'Seed to fix sequence of random values.')
-flags.DEFINE_string('optim', 'GradDesc', 'Optimization algorithm '
+flags.DEFINE_string('optim', 'Adam', 'Optimization algorithm '
                             '(GradDescProx, GradDesc, Adam, AdaGradProx).')
 flags.DEFINE_string('decay', 'cos', 'Polynomial (poly), cosine (cos) or (no).')
 flags.DEFINE_boolean('wait_first', True, 'First epoch with no log.')
@@ -130,7 +130,7 @@ def main(_):
           # first one
           syn0_partial = sess.run(word2vec.syn0)
           np.save(os.path.join(FLAGS.out_dir, 'embed_' + 
-                               str(nepoch).zfill(2)), syn0_partial)
+                               str(op_epoch).zfill(2)), syn0_partial)
           print('-------------------- Epoch: ', op_epoch)
           print(' average loss:', average_loss / sub_step)
           print(' learning rate:', op_lr)
@@ -152,7 +152,7 @@ def main(_):
   
           syn0_partial = sess.run(word2vec.syn0)
           np.save(os.path.join(FLAGS.out_dir, 'embed_' + 
-                               str(nepoch).zfill(2) + "_step_" +
+                               str(op_epoch).zfill(2) + "_step_" +
                                str(step).zfill(6)), syn0_partial)
           average_loss = 0.
           sub_step = 0
