@@ -291,7 +291,7 @@ def get_word_indices(sent, table_words):
     indices: rank-1 int tensor, the word indices within a sentence.
   """
   words = tf.string_split([sent]).values
-  indices = tf.cast(table_words.lookup(words), tf.int32) # 32
+  indices = tf.cast(table_words.lookup(words), tf.int32) # int32
   return indices
 
 
