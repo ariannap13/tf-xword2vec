@@ -114,7 +114,7 @@ class Word2VecModel(object):
       else:
         learning_rate = self._alpha      
         
-    lr = tf.cast(learning_rate, tf.float32) 
+    lr = tf.convert_to_tensor(learning_rate, tf.float64) 
 
     loss = self._build_loss(inputs, labels, dataset.unigram_counts)
     
@@ -188,7 +188,7 @@ class Word2VecModel(object):
     Returns:
       loss: float tensor of shape [batch_size, sample_size + 1].
     """
-    sampled_values = tf.nn.fixed_unigram_candidate_sampler(
+    sampled_values = tf.compat.v1.nn.fixed_unigram_candidate_sampler(
         true_classes=tf.expand_dims(labels, 1),
         num_true=1,
         num_sampled=self._batch_size*self._negatives,
@@ -249,7 +249,7 @@ class Word2VecModel(object):
         logits += tf.gather(biases, points)
 
       loss.append(tf.nn.sigmoid_cross_entropy_with_logits(
-          labels=tf.cast(codes, tf.float32), logits=logits))
+          labels=tf.cast(codes, tf.float64), logits=logits))
     loss = tf.concat(loss, axis=0)
     return loss
 
