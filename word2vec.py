@@ -42,6 +42,15 @@ class Word2VecModel(object):
     self._decay = decay
     
     self._syn0 = None
+    
+    if optim == 'Adam':
+      self._lr = 0.002
+    else:
+      self._lr = alpha
+
+  @property
+  def lr(self):
+    return self._lr
 
   @property
   def syn0(self):
@@ -99,10 +108,9 @@ class Word2VecModel(object):
     progress_rate = tf.identity(progress_rate, name='progress_rate')
     
     # learning rate
-    if self._optim == 'Adam':
-      learning_rate = 0.001
-    
-    if self._decay == 'poly':
+    if self._optim in ('Adam', 'GradDescProx', 'AdaGradProx'):
+      learning_rate = self._lr
+    elif self._decay == 'poly':
       learning_rate = tf.maximum(
                       (self._alpha - self._min_alpha) * (1 - progress_rate) + 
                       (self._min_alpha), self._min_alpha)
@@ -114,39 +122,34 @@ class Word2VecModel(object):
       learning_rate = tf.maximum(self._alpha * (1 - progress_rate),
                                  self._min_alpha)
     else:
-      learning_rate = self._alpha
+      learning_rate = self._lr
       
-    learning_rate = tf.to_float(learning_rate)
-        
+    self._lr = tf.to_float(learning_rate)
+
     loss = self._build_loss(inputs, labels, dataset.unigram_counts)
     func_loss = tf.identity(loss, name='func_loss')
     
     # optimizer
     if self._optim == 'Adam':
-      optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate)
+      optimizer = tf.compat.v1.train.AdamOptimizer(self._lr)
     elif self._optim == 'AdaGradProx':
-      # learning_rate = tf.cast(learning_rate, tf.float32)
       optimizer = tf.compat.v1.train.ProximalAdagradOptimizer(
-                            learning_rate,
+                            self._lr,
                             l1_regularization_strength=0.5,
                             l2_regularization_strength=0.5)
     elif self._optim == 'GradDescProx':
-      # learning_rate = tf.cast(learning_rate, tf.float32)
       optimizer = tf.compat.v1.train.ProximalGradientDescentOptimizer(
-                            learning_rate,
+                            self._lr,
                             l1_regularization_strength=0.5,
                             l2_regularization_strength=0.5)
     else:
-      # with decay
-      # learning_rate = tf.cast(learning_rate, tf.float64)
-      optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
+      optimizer = tf.compat.v1.train.GradientDescentOptimizer(self._lr)
       
     grad_update_op = optimizer.minimize(func_loss, global_step=global_step,
                                         name='grad_update_op')
     
     to_be_run_dict = {'grad_update_op': grad_update_op,  
                       'loss': func_loss,
-                      'learning_rate': learning_rate,
                       'progress_rate': progress_rate,
                       'op_epoch': op_epoch}
     return to_be_run_dict
