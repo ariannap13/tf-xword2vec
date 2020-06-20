@@ -123,7 +123,7 @@ def main(_):
       step += 1
       sub_step += 1
       average_loss += result_dict['loss'].mean()
-      op_lr = result_dict['learning_rate']
+      op_lr = sess.run(word2vec.lr)
       op_epoch = result_dict['op_epoch']
       train_progress = result_dict['progress_rate']
       
@@ -175,14 +175,12 @@ def main(_):
     syn0_final = sess.run(word2vec.syn0)
     np.save(os.path.join(FLAGS.out_dir, 'embed_final'), syn0_final)
 
-    with open(os.path.join(FLAGS.out_dir, 'vocab.txt'), 'w', encoding="utf-8") as fid:
-      for w in dataset.table_words:
-        fid.write(w + '\n')       
-      fid.close()
-
-    with open(os.path.join(FLAGS.out_dir, 'vocab_counts.txt'), 'w', encoding="utf-8") as fid:
-      for c in dataset.unigram_counts:
-        fid.write(str(c) + '\n')       
+    with open(os.path.join(FLAGS.out_dir, 'vocab.txt'), 'w',
+              encoding="utf-8") as fid:
+      word_and_freq = [dataset.table_words, dataset.unigram_counts] 
+      for i, w, c in enumerate(word_and_freq):
+        if i == 0: fid.write(w + '\t' + str(c))
+        else: fid.write('\n' + w + '\t' + str(c))
       fid.close()
       
     sess.close()
