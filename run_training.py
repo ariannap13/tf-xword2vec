@@ -12,6 +12,7 @@ vocabulary saved to /PATH/TO/OUT_DIR/vocab.txt
 """
 import os
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 
 curr_path = os.path.dirname(os.path.abspath(__file__))
@@ -26,14 +27,14 @@ flags = tf.app.flags
 flags.DEFINE_string('arch', 'skip_gram', 'Architecture (skip_gram or cbow).')
 flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
     '(negative_sampling or hierarchical_softmax).')
-flags.DEFINE_integer('epochs', 15, 'Num of epochs to iterate training data.')
-flags.DEFINE_integer('batch_size', 256, 'Batch size.')
+flags.DEFINE_integer('epochs', 1, 'Num of epochs to iterate training data.')
+flags.DEFINE_integer('batch_size', 512, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
                      'If > 0, the top `max_vocab_size` most frequent words'
                      ' are kept in vocabulary.')
 flags.DEFINE_integer('min_count', 2, 'Words whose counts < `min_count` are not'
                                      ' included in the vocabulary.')
-flags.DEFINE_float('sample', 0.001, 'Subsampling rate.')
+flags.DEFINE_float('sample', 0.0007, 'Subsampling rate.')
 flags.DEFINE_integer('window_size', 6, 'Num of words on the left or right side' 
                                        ' of target word within a window.')
 flags.DEFINE_integer('embed_size', 200, 'Length of word vector.')
@@ -48,11 +49,12 @@ flags.DEFINE_integer('log_per_steps', 1000, 'Every `log_per_steps` steps to '
 flags.DEFINE_list('filenames', None, 'Names of comma-separated input text files.')
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
 flags.DEFINE_integer('seed', 0, 'Seed to fix sequence of random values.')
-flags.DEFINE_string('optim', 'GradDesc', 'Optimization algorithm '
+flags.DEFINE_string('optim', 'Adam', 'Optimization algorithm '
                             '(GradDescProx, GradDesc, Adam, AdaGradProx).')
-flags.DEFINE_string('decay', 'poly', 'Polynomial (poly), cosine (cos) or (no).')
+flags.DEFINE_string('decay', 'no', 'Polynomial (poly), cosine (cos) or (no).')
 
 FLAGS = flags.FLAGS
+
 
 def del_all_flags(FLAGS):
     flags_dict = FLAGS._flags()
@@ -101,7 +103,7 @@ def main(_):
     print("optimizer: ", FLAGS.optim)
     print("epochs: ", FLAGS.epochs)
     print("model: ", FLAGS.arch)
-    print("train loss: ", FLAGS.algm)
+    print("strategy : ", FLAGS.algm)
     
     # open log file
     log_arq = "log_" + FLAGS.optim + "_" + FLAGS.arch + "_" + FLAGS.algm \
@@ -147,13 +149,14 @@ def main(_):
         fw = open(os.path.join(FLAGS.out_dir, 'vocab.txt'), 'w',
                  encoding="utf-8")
         list_vocab = dataset.table_words
-        word_and_freq = zip(list_vocab, dataset.unigram_counts) 
+        word_and_freq = zip(list_vocab, dataset.unigram_counts, 
+                            dataset.keep_probs) 
         for i, w_f in enumerate(word_and_freq):
           if i > 0:
             fw.write('\n')
             ff.write('\n')
           fw.write(w_f[0])
-          ff.write(w_f[0] + '\t' + str(w_f[1]))
+          ff.write(w_f[0] + '\t' + str(w_f[1]) + '\t' + str(w_f[2]))
         fw.close()
         ff.close()
       else:
@@ -170,7 +173,7 @@ def main(_):
                           + "\t" + str(op_lr))
   
           syn0_partial = sess.run(word2vec.syn0)
-          np.save(os.path.join(FLAGS.out_dir, 'embed_' + 
+          np.save(os.path.join(FLAGS.out_dir, 'embed_' +
                                str(op_epoch).zfill(2) + "_step_" +
                                str(step).zfill(6)), syn0_partial)
           average_loss = 0.
@@ -182,22 +185,31 @@ def main(_):
         average_loss /= sub_step
         print('epoch:', op_epoch, ' step:', step) 
         print(' average loss:', average_loss)
-        print(' learning rate:', result_dict['learning_rate'])
-        
+        print(' learning rate:', op_lr)
+        print(' progress:', 1.)
         flog.write("\n" + str(step) + "\t" + str(op_epoch) \
-                                    + "\t" + str(average_loss))
+                                    + "\t" + str(average_loss/sub_step) \
+                                    + "\t" + str(op_lr))
     flog.close()
     
     syn0_final = sess.run(word2vec.syn0)
     np.save(os.path.join(FLAGS.out_dir, 'embed_final'), syn0_final)
 
-    with open(os.path.join(FLAGS.out_dir, 'vocab.txt'), 'w',
-              encoding="utf-8") as fid:
-      word_and_freq = [dataset.table_words, dataset.unigram_counts] 
-      for i, w, c in enumerate(word_and_freq):
-        if i == 0: fid.write(w + '\t' + str(c))
-        else: fid.write('\n' + w + '\t' + str(c))
-      fid.close()
+    df_embeddings = pd.DataFrame(syn0_final, index = list_vocab)
+    store = pd.HDFStore(os.path.join(FLAGS.out_dir, 'store.h5'))
+    store['df'] = df_embeddings
+    store.close()
+    
+    df_embeddings.to_csv(
+                  os.path.join(FLAGS.out_dir, 'df_embeddings.vec'), sep='\t',
+                               header=False, index=False)
+    
+    with open(os.path.join(FLAGS.out_dir, 'df_embeddings.tsv'), 'w',
+         encoding="utf-8") as fw:
+      fw.write('word')
+      for w in list_vocab:
+        fw.write('\n' + w)
+      fw.close()
 
     sess.close()
     

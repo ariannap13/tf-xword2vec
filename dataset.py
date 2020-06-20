@@ -9,7 +9,6 @@ from functools import partial
 
 OOV_ID = -1
 
-
 class Word2VecDataset(object):
   """Dataset for generating matrices holding word indices to train Word2Vec 
   models.
@@ -67,6 +66,10 @@ class Word2VecDataset(object):
   @property
   def unigram_counts(self):
     return self._unigram_counts
+
+  @property
+  def keep_probs(self):
+    return self._keep_probs
 
   def _build_raw_vocab(self, filenames):
     """Builds raw vocabulary.
