@@ -112,26 +112,24 @@ class Word2VecModel(object):
         learning_rate = tf.maximum(self._alpha * (1 - rate_progress),
                                    self._min_alpha)
       else:
-        learning_rate = self._alpha      
+        learning_rate = self._alpha
         
-    lr = tf.convert_to_tensor(learning_rate, tf.float64) 
-
+    learning_rate = tf.cast(learning_rate, tf.float32)
+        
     loss = self._build_loss(inputs, labels, dataset.unigram_counts)
     
     # optimizer
     if self._optim == 'Adam':
-      optimizer = tf.compat.v1.train.AdamOptimizer(lr)
+      optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate)
     elif self._optim == 'AdaGradProx':
-      optimizer = tf.compat.v1.train.ProximalAdagradOptimizer(lr)
+      optimizer = tf.compat.v1.train.ProximalAdagradOptimizer(learning_rate)
     elif self._optim == 'GradDescProx':
-      optimizer = tf.compat.v1.train.ProximalGradientDescentOptimizer(lr)
+      optimizer = tf.compat.v1.train.ProximalGradientDescentOptimizer(learning_rate)
     else:
       # with decay
-      optimizer = tf.compat.v1.train.GradientDescentOptimizer(lr)
+      optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
       
-    grad_update_op = optimizer.minimize(
-                        loss,
-                        gate_gradients=tf.compat.v1.train.Optimizer.GATE_OP)
+    grad_update_op = optimizer.minimize(loss)
     
     to_be_run_dict = {'grad_update_op': grad_update_op,  
                       'loss': loss, 
@@ -249,7 +247,7 @@ class Word2VecModel(object):
         logits += tf.gather(biases, points)
 
       loss.append(tf.nn.sigmoid_cross_entropy_with_logits(
-          labels=tf.cast(codes, tf.float64), logits=logits))
+          labels=tf.cast(codes, tf.float64), logits=logits)) # 64
     loss = tf.concat(loss, axis=0)
     return loss
 
