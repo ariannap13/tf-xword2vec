@@ -47,7 +47,11 @@ flags.DEFINE_integer('log_per_steps', 1000, 'Every `log_per_steps` steps to '
                                             ' output logs.')
 flags.DEFINE_list('filenames', None, 'Names of comma-separated input text files.')
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
+<<<<<<< HEAD
 flags.DEFINE_integer('seed', 777, 'Seed to fix sequence of random values.')
+=======
+flags.DEFINE_integer('seed', 0, 'Seed to fix sequence of random values.')
+>>>>>>> 50bcb6674fc9ce3fbe0a37d78fbcfe9c0d0b2072
 flags.DEFINE_string('optim', 'Adam', 'Optimization algorithm '
                             '(GradDescProx, GradDesc, Adam, AdaGradProx).')
 flags.DEFINE_string('decay', 'no', 'Polynomial (poly), cosine (cos) or (no).')
@@ -175,8 +179,13 @@ def main(_):
         fw = open(os.path.join(FLAGS.out_dir, 'vocab.txt'), 'w',
                  encoding="utf-8")
         list_vocab = dataset.table_words
+<<<<<<< HEAD
         word_and_freq = zip(list_vocab, dataset.unigram_counts, 
                             dataset.keep_probs) 
+=======
+        sample_prob = dataset.sample_prob
+        word_and_freq = zip(list_vocab, dataset.unigram_counts) 
+>>>>>>> 50bcb6674fc9ce3fbe0a37d78fbcfe9c0d0b2072
         for i, w_f in enumerate(word_and_freq):
           if i > 0:
             fw.write('\n')
@@ -213,7 +222,10 @@ def main(_):
         print('epoch:', op_epoch, ' step:', step) 
         print(' average loss:', average_loss)
         print(' learning rate:', op_lr)
+<<<<<<< HEAD
         print(' progress:', 1.)
+=======
+>>>>>>> 50bcb6674fc9ce3fbe0a37d78fbcfe9c0d0b2072
         flog.write("\n" + str(step) + "\t" + str(op_epoch) \
                                     + "\t" + str(average_loss/sub_step) \
                                     + "\t" + str(op_lr))
@@ -222,8 +234,27 @@ def main(_):
     syn0_final = sess.run(word2vec.syn0)
     np.save(os.path.join(FLAGS.out_dir, 'embed_final'), syn0_final)
 
+<<<<<<< HEAD
     save_embed_proj(syn0_final, list_vocab, FLAGS.out_dir)
     
+=======
+    df_embeddings = pd.DataFrame(syn0_final, index = list_vocab)
+    store = pd.HDFStore(os.path.join(FLAGS.out_dir, 'store.h5'))
+    store['df'] = df_embeddings
+    store.close()
+    
+    df_embeddings.to_csv(
+                  os.path.join(FLAGS.out_dir, 'df_embeddings.vec'), sep='\t',
+                               header=False, index=False)
+    
+    with open(os.path.join(FLAGS.out_dir, 'df_embeddings.tsv'), 'w',
+         encoding="utf-8") as fw:
+      write('word')
+      for w in list_vocab:
+        write('\n' + w)
+      close()
+
+>>>>>>> 50bcb6674fc9ce3fbe0a37d78fbcfe9c0d0b2072
     sess.close()
     
   print('Word embeddings saved to', os.path.join(FLAGS.out_dir, 'embed.npy'))
