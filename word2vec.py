@@ -90,52 +90,65 @@ class Word2VecModel(object):
     """
     tensor_dict = dataset.get_tensor_dict(filenames)
     inputs, labels = tensor_dict['inputs'], tensor_dict['labels']
-    epoch = tensor_dict['epoch']
+    op_epoch = tensor_dict['epoch'][0]
+    op_epoch = tf.identity(op_epoch, name='op_epoch')
     
-    # not used. using progress rate
-    global_step = tf.train.get_or_create_global_step()
-    rate_progress = tensor_dict['progress'][0] 
+    # instead of global step, progress rate is used to calculate learning rate
+    global_step = tf.compat.v1.train.get_or_create_global_step()
+    progress_rate = tensor_dict['progress'][0]
+    progress_rate = tf.identity(progress_rate, name='progress_rate')
     
     # learning rate
     if self._optim == 'Adam':
       learning_rate = 0.001
+    
+    if self._decay == 'poly':
+      learning_rate = tf.maximum(
+                      (self._alpha - self._min_alpha) * (1 - progress_rate) + 
+                      (self._min_alpha), self._min_alpha)
+    elif self._decay == 'cos':
+      learning_rate = tf.maximum(self._alpha * 0.5 * 
+                                 (1 + tf.cos(np.pi * progress_rate)),
+                                 self._min_alpha)
+    elif self._decay == 'lin':
+      learning_rate = tf.maximum(self._alpha * (1 - progress_rate),
+                                 self._min_alpha)
     else:
-      if self._decay == 'poly':
-        learning_rate = tf.maximum(
-                        (self._alpha - self._min_alpha) * (1 - rate_progress) + 
-                        (self._min_alpha), self._min_alpha)
-      elif self._decay == 'cos':
-        learning_rate = tf.maximum(self._alpha * 0.5 * 
-                                   (1 + tf.cos(np.pi * rate_progress)),
-                                   self._min_alpha)
-      elif self._decay == 'lin':
-        learning_rate = tf.maximum(self._alpha * (1 - rate_progress),
-                                   self._min_alpha)
-      else:
-        learning_rate = self._alpha
-        
-    learning_rate = tf.cast(learning_rate, tf.float32)
+      learning_rate = self._alpha
+      
+    learning_rate = tf.to_float(learning_rate)
         
     loss = self._build_loss(inputs, labels, dataset.unigram_counts)
+    func_loss = tf.identity(loss, name='func_loss')
     
     # optimizer
     if self._optim == 'Adam':
       optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate)
     elif self._optim == 'AdaGradProx':
-      optimizer = tf.compat.v1.train.ProximalAdagradOptimizer(learning_rate)
+      # learning_rate = tf.cast(learning_rate, tf.float32)
+      optimizer = tf.compat.v1.train.ProximalAdagradOptimizer(
+                            learning_rate,
+                            l1_regularization_strength=0.5,
+                            l2_regularization_strength=0.5)
     elif self._optim == 'GradDescProx':
-      optimizer = tf.compat.v1.train.ProximalGradientDescentOptimizer(learning_rate)
+      # learning_rate = tf.cast(learning_rate, tf.float32)
+      optimizer = tf.compat.v1.train.ProximalGradientDescentOptimizer(
+                            learning_rate,
+                            l1_regularization_strength=0.5,
+                            l2_regularization_strength=0.5)
     else:
       # with decay
+      # learning_rate = tf.cast(learning_rate, tf.float64)
       optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
       
-    grad_update_op = optimizer.minimize(loss, global_step=global_step)
+    grad_update_op = optimizer.minimize(func_loss, global_step=global_step,
+                                        name='grad_update_op')
     
     to_be_run_dict = {'grad_update_op': grad_update_op,  
-                      'loss': loss, 
+                      'loss': func_loss,
                       'learning_rate': learning_rate,
-                      'progress': tf.cast(tensor_dict['progress'][0], tf.float32),
-                      'epoch': tf.cast(epoch[0], tf.int32)}
+                      'progress_rate': progress_rate,
+                      'op_epoch': op_epoch}
     return to_be_run_dict
 
   def _create_embeddings(self, vocab_size, scope=None):
@@ -246,10 +259,9 @@ class Word2VecModel(object):
       if self._add_bias:
         logits += tf.gather(biases, points)
 
-      # loss.append(tf.nn.sigmoid_cross_entropy_with_logits(
-      #     labels=tf.cast(codes, tf.float64), logits=logits)) # 64
+      # float type dependency!
       loss.append(tf.nn.sigmoid_cross_entropy_with_logits(
-           labels=tf.to_float(codes), logits=logits))
+           labels=tf.cast(codes, dtype=tf.float64), logits=logits)) # to_float
     loss = tf.concat(loss, axis=0)
     return loss
 
