@@ -50,7 +50,7 @@ flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
 flags.DEFINE_integer('seed', 0, 'Seed to fix sequence of random values.')
 flags.DEFINE_string('optim', 'GradDesc', 'Optimization algorithm '
                             '(GradDescProx, GradDesc, Adam, AdaGradProx).')
-flags.DEFINE_string('decay', 'no', 'Polynomial (poly), cosine (cos) or (no).')
+flags.DEFINE_string('decay', 'poly', 'Polynomial (poly), cosine (cos) or (no).')
 
 FLAGS = flags.FLAGS
 
@@ -137,9 +137,25 @@ def main(_):
         print(' learning rate:', op_lr)
         print(' progress:', round(train_progress,4))
         print('------------------------------------')
+        # save first log line with the first loss and learning rate
         flog.write("\n" + str(step) + "\t" + str(op_epoch) \
                    + "\t" + str(average_loss / sub_step) \
                    + "\t" + str(op_lr))
+        # save vocab with frequency
+        ff = open(os.path.join(FLAGS.out_dir, 'vocab_freq.txt'), 'w',
+                  encoding="utf-8") 
+        fw = open(os.path.join(FLAGS.out_dir, 'vocab.txt'), 'w',
+                 encoding="utf-8")
+        list_vocab = dataset.table_words
+        word_and_freq = zip(list_vocab, dataset.unigram_counts) 
+        for i, w_f in enumerate(word_and_freq):
+          if i > 0:
+            fw.write('\n')
+            ff.write('\n')
+          fw.write(w_f[0])
+          ff.write(w_f[0] + '\t' + str(w_f[1]))
+        fw.close()
+        ff.close()
       else:
         divisor = FLAGS.log_per_steps
 
@@ -182,7 +198,7 @@ def main(_):
         if i == 0: fid.write(w + '\t' + str(c))
         else: fid.write('\n' + w + '\t' + str(c))
       fid.close()
-      
+
     sess.close()
     
   print('Word embeddings saved to', os.path.join(FLAGS.out_dir, 'embed.npy'))
