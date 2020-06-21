@@ -93,7 +93,6 @@ def save_embed_proj(array_embed, list_vocab, path_embed):
     for w in list_vocab:
       fw.write('\n' + w)
     fw.close()
-
 # ================== main ================== 
 def main(_):
   dataset = Word2VecDataset(arch=FLAGS.arch,
@@ -175,9 +174,9 @@ def main(_):
         fw = open(os.path.join(FLAGS.out_dir, 'vocab.txt'), 'w',
                  encoding="utf-8")
         list_vocab = dataset.table_words
-        word_and_freq = zip(list_vocab, 
+        word_and_freq = zip(list_vocab,
                             dataset.unigram_counts,
-                            dataset.sample_probs) 
+                            dataset.keep_probs) 
         for i, w_f in enumerate(word_and_freq):
           if i > 0:
             fw.write('\n')
