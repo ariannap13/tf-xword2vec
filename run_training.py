@@ -25,8 +25,8 @@ flags = tf.app.flags
 flags.DEFINE_string('arch', 'skip_gram', 'Architecture (skip_gram or cbow).')
 flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
     '(negative_sampling or hierarchical_softmax).')
-flags.DEFINE_integer('epochs', 2, 'Num of epochs to iterate training data.')
-flags.DEFINE_integer('batch_size', 512, 'Batch size.')
+flags.DEFINE_integer('epochs', 10, 'Num of epochs to iterate training data.')
+flags.DEFINE_integer('batch_size', 300, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
                      'If > 0, the top `max_vocab_size` most frequent words'
                      ' are kept in vocabulary.')
@@ -151,15 +151,15 @@ def main(_):
         ff.close()
       else:
         divisor = FLAGS.log_per_steps
-
+        average_loss /= sub_step
         if step % divisor == 0:
           print('epoch:', op_epoch, ' step:', step)
-          print(' average loss:', average_loss / sub_step)
+          print(' average loss:', average_loss)
           print(' learning rate:', op_lr)
           print(' progress:', round(train_progress,4))
           print('------------------------------------')
           flog.write("\n" + str(step) + "\t" + str(op_epoch) \
-                          + "\t" + str(average_loss / sub_step)
+                          + "\t" + str(average_loss)
                           + "\t" + str(op_lr))
   
           syn0_partial = sess.run(word2vec.syn0)
@@ -179,7 +179,7 @@ def main(_):
         print(' learning rate:', op_lr)
         print(' progress:', 1.)
         flog.write("\n" + str(step) + "\t" + str(op_epoch) \
-                                    + "\t" + str(average_loss/sub_step) \
+                                    + "\t" + str(average_loss) \
                                     + "\t" + str(op_lr))
     flog.close()
     
