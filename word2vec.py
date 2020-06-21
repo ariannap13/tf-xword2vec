@@ -46,6 +46,7 @@ class Word2VecModel(object):
     self._syn0 = None
     
     if optim == 'Adam':
+      #  self._lr = 0.002  is get better results than 0.001 and 0.003
       self._lr = 0.002
     else:
       self._lr = alpha
