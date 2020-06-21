@@ -1,3 +1,5 @@
+# Word2vec Model Class
+
 import heapq
 
 import numpy as np
