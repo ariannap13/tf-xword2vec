@@ -137,13 +137,13 @@ class Word2VecModel(object):
     elif self._optim == 'AdaGradProx':
       optimizer = tf.compat.v1.train.ProximalAdagradOptimizer(
                             self._lr,
-                            l1_regularization_strength=0.5,
-                            l2_regularization_strength=0.5)
+                            l1_regularization_strength=0.00001,
+                            l2_regularization_strength=0.00001)
     elif self._optim == 'GradDescProx':
       optimizer = tf.compat.v1.train.ProximalGradientDescentOptimizer(
                             self._lr,
-                            l1_regularization_strength=0.5,
-                            l2_regularization_strength=0.5)
+                            l1_regularization_strength=0.0,
+                            l2_regularization_strength=0.0)
     else:
       optimizer = tf.compat.v1.train.GradientDescentOptimizer(self._lr)
       
