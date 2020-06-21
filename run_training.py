@@ -17,7 +17,7 @@ import tensorflow as tf
 # import project files
 from dataset import Word2VecDataset
 from word2vec import Word2VecModel
-from data_util import DataFileTools 
+import data_util
 
 
 flags = tf.app.flags
@@ -80,7 +80,7 @@ def main(_):
                            decay=FLAGS.decay)
   to_be_run_dict = word2vec.train(dataset, FLAGS.filenames)
   
-  datatools = DataFileTools(out_path=FLAGS.out_dir)
+  datatools = data_util.DataFileTools(out_path=FLAGS.out_dir)
 
   with tf.compat.v1.Session() as sess:
     sess.run(dataset.iterator_initializer)
