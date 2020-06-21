@@ -39,36 +39,49 @@ class DataFileTools(object):
       sufix = sufix + extension
       return sufix
   
+  def _path_file(self, fname=None, full_path=None, subfolder=None):
+    if (fname is None):
+      raise Exception("file name is empty")
+    if (full_path is None):
+      full_path = curr_path
+    if (subfolder is None):
+      return os.path.join(full_path, fname)
+    else:
+      return os.path.join(full_path, subfolder, fname)
+  
   def remove_last_empty(self, full_path):
     try:
       with open(full_path, encoding='utf-8') as f_input:
         data = f_input.read().rstrip('\n')
       with open(full_path, 'w', encoding='utf-8') as f_output:    
         f_output.write(data)
-      except: return False
-      return True
+      except: 
+        return False
+    return True
   
-  def save_embed_proj(self, array_embed, list_vocab, path_embed,
+  def save_embed_proj(self, array_embed, list_vocab, path_embed=None,
                       fname='embeddings'):
+    if path_embed is None:
+      path_embed = self.out_path
+      
     # create dataframe
     df_embed = pd.DataFrame(array_embed, index=list_vocab)
+    
     # save it in HDF5
-    store = pd.HDFStore(os.path.join(path_embed, fname + '.h5'))
+    store = pd.HDFStore(_path_file(fname + '.h5',, path_embed))
     store['df_embed'] = df_embed
     store.close()
-    # save vector to Google project, for instance
-    df_embed.to_csv(os.path.join(path_embed, fname + '.vec'),
-                    sep='\t', header=False, index=False)
     
+    # save vector to Google project, for instance
+    file_vec = _path_file((fname + '.vec',, path_embed)
+    df_embed.to_csv(file_vec, sep='\t', header=False, index=False)
     # remove last blank line in vector file
-    full_path = os.path.join(path_embed, fname + '.vec')
-    rep = self.remove_last_empty(full_path)
+    self.remove_last_empty(file_vec)
     
     # create label file
-    os.path.join(path_embed, 'project_embed.lbl')
-    with open(full_path, 'w', encoding="utf-8") as fw:
+    file_vec = _path_file('project_embed.lbl',, path_embed)
+    with open(file_vec, 'w', encoding="utf-8") as fw:
       for i, w in enumerate(list_vocab):
         if i > 0: fw.write('\n' + w)
         else: fw.write(w)
       fw.close()
-  
