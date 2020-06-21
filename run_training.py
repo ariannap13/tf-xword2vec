@@ -14,11 +14,10 @@ import os
 import numpy as np
 import tensorflow as tf
 
-curr_path = os.path.dirname(os.path.abspath(__file__))
-
 # import project files
 from dataset import Word2VecDataset
 from word2vec import Word2VecModel
+from data_util import DataTools 
 
 
 flags = tf.app.flags
@@ -26,7 +25,7 @@ flags = tf.app.flags
 flags.DEFINE_string('arch', 'skip_gram', 'Architecture (skip_gram or cbow).')
 flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
     '(negative_sampling or hierarchical_softmax).')
-flags.DEFINE_integer('epochs', 1, 'Num of epochs to iterate training data.')
+flags.DEFINE_integer('epochs', 2, 'Num of epochs to iterate training data.')
 flags.DEFINE_integer('batch_size', 512, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
                      'If > 0, the top `max_vocab_size` most frequent words'
@@ -55,44 +54,6 @@ flags.DEFINE_string('decay', 'no', 'Polynomial (poly), cosine (cos) or (no).')
 FLAGS = flags.FLAGS
 
 
-def del_all_flags(FLAGS):
-    flags_dict = FLAGS._flags()
-    keys_list = [keys for keys in flags_dict]
-    for keys in keys_list:
-        FLAGS.__delattr__(keys)
-
-def time_sufix(extension=".log"):
-    from time import strftime
-    sufix = "_" + strftime("%Y-%m-%d_%H-%M")
-    sufix = sufix + extension
-    return sufix
-
-def remove_last_empty(arq):
-  with open(arq, encoding='utf-8') as f_input:
-    data = f_input.read().rstrip('\n')
-  with open(arq, 'w', encoding='utf-8') as f_output:    
-    f_output.write(data)
-
-def save_embed_proj(array_embed, list_vocab, path_embed):
-  import pandas as pd
-  # create dataframe
-  df_embed = pd.DataFrame(array_embed, index=list_vocab)
-  # save it in HDF5
-  store = pd.HDFStore(os.path.join(FLAGS.out_dir, 'embeddings.h5'))
-  store['df_embed'] = df_embed
-  store.close()
-  # save vector to Google project, for instance
-  df_embed.to_csv(os.path.join(path_embed, 'project_embed.vec'),
-                  sep='\t', header=False, index=False)
-  # remove last blank line in vector file
-  remove_last_empty(os.path.join(path_embed, 'project_embed.vec'))
-  # create label file
-  with open(os.path.join(FLAGS.out_dir, 'project_embed.tsv'), 'w',
-       encoding="utf-8") as fw:
-    fw.write('word')
-    for w in list_vocab:
-      fw.write('\n' + w)
-    fw.close()
 # ================== main ================== 
 def main(_):
   dataset = Word2VecDataset(arch=FLAGS.arch,
@@ -118,6 +79,8 @@ def main(_):
                            optim=FLAGS.optim,
                            decay=FLAGS.decay)
   to_be_run_dict = word2vec.train(dataset, FLAGS.filenames)
+  
+  datatools = DataFileTools(out_path=FLAGS.out_dir)
 
   with tf.compat.v1.Session() as sess:
     sess.run(dataset.iterator_initializer)
@@ -131,8 +94,9 @@ def main(_):
     
     # open log file
     log_arq = "log_" + FLAGS.optim + "_" + FLAGS.arch + "_" + FLAGS.algm \
-                                   + time_sufix(".log")
-    flog = open(os.path.join(curr_path, FLAGS.out_dir, log_arq), "w", encoding="utf-8")
+                                   + datatools.time_sufix(".log")
+    flog = open(datatools.path_file(log_arq, FLAGS.out_dir), "w",
+                encoding="utf-8")
     flog.write("Step\tEpoch\tAverageLoss\tLearningRate")
 
     average_loss = 0.
@@ -222,7 +186,7 @@ def main(_):
     syn0_final = sess.run(word2vec.syn0)
     np.save(os.path.join(FLAGS.out_dir, 'embed_final'), syn0_final)
 
-    save_embed_proj(syn0_final, list_vocab, FLAGS.out_dir)
+    datatools.save_embed_proj(syn0_final, list_vocab, FLAGS.out_dir)
       
     sess.close()
     
