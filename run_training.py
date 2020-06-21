@@ -17,7 +17,7 @@ import tensorflow as tf
 # import project files
 from dataset import Word2VecDataset
 from word2vec import Word2VecModel
-from data_util import DataTools 
+from data_util import DataFileTools 
 
 
 flags = tf.app.flags

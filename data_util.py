@@ -55,8 +55,8 @@ class DataFileTools(object):
         data = f_input.read().rstrip('\n')
       with open(full_path, 'w', encoding='utf-8') as f_output:    
         f_output.write(data)
-      except: 
-        return False
+    except: 
+      return False
     return True
   
   def save_embed_proj(self, array_embed, list_vocab, path_embed=None,
