@@ -17,7 +17,7 @@ import tensorflow as tf
 # import project files
 from dataset import Word2VecDataset
 from word2vec import Word2VecModel
-import data_util
+import data_util as du
 
 
 flags = tf.app.flags
@@ -80,7 +80,7 @@ def main(_):
                            decay=FLAGS.decay)
   to_be_run_dict = word2vec.train(dataset, FLAGS.filenames)
   
-  datatools = data_util.DataFileTools(out_path=FLAGS.out_dir)
+  datatools = du.DataFileTools(out_path=FLAGS.out_dir)
 
   with tf.compat.v1.Session() as sess:
     sess.run(dataset.iterator_initializer)
@@ -95,7 +95,7 @@ def main(_):
     # open log file
     log_arq = "log_" + FLAGS.optim + "_" + FLAGS.arch + "_" + FLAGS.algm \
                                    + datatools.time_sufix(".log")
-    flog = open(datatools.path_file(log_arq, FLAGS.out_dir), "w",
+    flog = open(du.path_file(log_arq, subfolder=FLAGS.out_dir), "w",
                 encoding="utf-8")
     flog.write("Step\tEpoch\tAverageLoss\tLearningRate")
 

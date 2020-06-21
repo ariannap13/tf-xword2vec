@@ -9,6 +9,16 @@ import os
 
 curr_path = os.path.dirname(os.path.abspath(__file__))
 
+def path_file(fname, subfolder=None, full_path=None):
+  if (fname is None):
+    raise Exception("file name is empty")
+  if (full_path is None):
+    full_path = curr_path
+  if (subfolder is None):
+    return os.path.join(full_path, fname)
+  else:
+    return os.path.join(full_path, subfolder, fname)
+
 class DataFileTools(object):
   """ Data file tools.
   """
@@ -78,7 +88,7 @@ class DataFileTools(object):
     store.close()
     
     # save vector to Google project, for instance
-    file_vec = path_file((fname + '.vec', subfolder=path_embed)
+    file_vec = path_file(fname + '.vec', subfolder=path_embed)
     df_embed.to_csv(file_vec, sep='\t', header=False, index=False)
     # remove last blank line in vector file
     self.remove_last_empty(file_vec)
@@ -90,13 +100,3 @@ class DataFileTools(object):
         if i > 0: fw.write('\n' + w)
         else: fw.write(w)
       fw.close()
-
-def path_file(self, fname=None, subfolder=None, full_path=None):
-  if (fname is None):
-    raise Exception("file name is empty")
-  if (full_path is None):
-    full_path = curr_path
-  if (subfolder is None):
-    return os.path.join(full_path, fname)
-  else:
-    return os.path.join(full_path, subfolder, fname)
