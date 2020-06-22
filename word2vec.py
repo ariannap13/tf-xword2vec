@@ -47,7 +47,7 @@ class Word2VecModel(object):
     
     if optim == 'Adam':
       #  self._lr = 0.002  is get better results than 0.001 and 0.003
-      self._lr = 0.002
+      self._lr = 0.001
     else:
       self._lr = alpha
 
@@ -86,7 +86,7 @@ class Word2VecModel(object):
             inputs, labels, syn0, syn1, biases)
       return loss
 
-  def train(self, dataset, filenames):
+  def train(self, dataset, filenames, epochs):
     """Adds training related ops to the graph.
 
     Args:
@@ -98,16 +98,17 @@ class Word2VecModel(object):
         the following entries:
         { 'grad_update_op': optimization ops,
           'loss': cross entropy loss,
-          'learning_rate': float-scalar learning rate}
+          'progress_rate': float with progress rate
+          }
     """
-    tensor_dict = dataset.get_tensor_dict(filenames)
+    tensor_dict = dataset.get_tensor_dict(filenames, epochs)
     inputs, labels = tensor_dict['inputs'], tensor_dict['labels']
-    op_epoch = tensor_dict['epoch'][0]
+    op_epoch = tf.int32(tensor_dict['epoch'][0])
     op_epoch = tf.identity(op_epoch, name='op_epoch')
     
     # instead of global step, progress rate is used to calculate learning rate
     global_step = tf.compat.v1.train.get_or_create_global_step()
-    progress_rate = tensor_dict['progress'][0]
+    progress_rate = tf.to_float(tensor_dict['progress'][0])
     progress_rate = tf.identity(progress_rate, name='progress_rate')
     
     # learning rate
