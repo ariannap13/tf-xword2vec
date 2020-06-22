@@ -16,7 +16,6 @@ class Word2VecDataset(object):
   def __init__(self,
                arch='skip_gram',
                algm='negative_sampling',
-               epochs=5,
                batch_size=100,
                max_vocab_size=0,
                min_count=2,
@@ -27,7 +26,6 @@ class Word2VecDataset(object):
       arch: string scalar, architecture ('skip_gram' or 'cbow').
       algm: string scalar: training algorithm ('negative_sampling' or
         'hierarchical_softmax').
-      epochs: int scalar, num times the dataset is iterated.
       batch_size: int scalar, the returned tensors in `get_tensor_dict` have
         shapes [batch_size, :]. 
       max_vocab_size: int scalar, maximum vocabulary size. If > 0, the top 
@@ -40,7 +38,6 @@ class Word2VecDataset(object):
     """
     self._arch = arch
     self._algm = algm
-    self._epochs = epochs
     self._batch_size = batch_size
     self._max_vocab_size = max_vocab_size
     self._min_count = min_count
@@ -186,10 +183,11 @@ class Word2VecDataset(object):
       labels = tensor[:, 2 * self._window_size + 1:]
     return inputs, labels
 
-  def get_tensor_dict(self, filenames):
+  def get_tensor_dict(self, filenames, epochs):
     """Generates tensor dict mapping from tensor names to tensors.
     Args:
       filenames: list of strings, holding names of text files.
+      epochs: int scalar, num times the dataset is iterated.
       
     Returns:
       tensor_dict: a dict mapping from tensor names to tensors with shape being:
@@ -224,12 +222,12 @@ class Word2VecDataset(object):
 
     num_sents = sum([len(list(open(fn, encoding="utf-8")
                               )) for fn in filenames])
-    num_sents = self._epochs * num_sents
+    num_sents = epochs * num_sents
     
     # include epoch number, like progress
-    a_zip = tf.data.TextLineDataset(filenames).repeat(self._epochs)
-    b_zip = tf.range(1, 1+num_sents) / num_sents
-    c_zip = tf.repeat(tf.range(1, 1+self._epochs), int(num_sents / self._epochs))
+    a_zip = tf.data.TextLineDataset(filenames).repeat(epochs)
+    b_zip = tf.range(1, 1 + num_sents) / num_sents
+    c_zip = tf.repeat(tf.range(1, 1+epochs), int(num_sents / epochs))
     
     dataset = tf.data.Dataset.zip((a_zip,
                                    tf.data.Dataset.from_tensor_slices(b_zip),
@@ -259,7 +257,6 @@ class Word2VecDataset(object):
     iterator = tf.compat.v1.data.make_initializable_iterator(dataset)
     self._iterator_initializer = iterator.initializer
     tensor, progress, epoch = iterator.get_next()
-    
     progress.set_shape([self._batch_size])
     epoch.set_shape([self._batch_size])
 
@@ -269,7 +266,8 @@ class Word2VecDataset(object):
     if self._algm == 'negative_sampling':
       labels = tf.squeeze(labels, axis=1)
       
-    return {'inputs': inputs, 'labels': labels, 'progress': progress, 'epoch': epoch}
+    return {'inputs': inputs, 'labels': labels,
+            'progress': progress, 'epoch': epoch}
 
 
 def get_word_indices(sent, table_words):
