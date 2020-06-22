@@ -23,7 +23,6 @@ class Word2VecDataset(object):
                sample=1e-3,
                window_size=5):
     """Constructor.
-
     Args:
       arch: string scalar, architecture ('skip_gram' or 'cbow').
       algm: string scalar: training algorithm ('negative_sampling' or
@@ -73,10 +72,8 @@ class Word2VecDataset(object):
 
   def _build_raw_vocab(self, filenames):
     """Builds raw vocabulary.
-
     Args:
       filenames: list of strings, holding names of text files.
-
     Returns: 
       raw_vocab: a list of 2-tuples holding the word (string) and count (int),
         sorted in descending order of word count. 
@@ -93,7 +90,6 @@ class Word2VecDataset(object):
 
   def build_vocab(self, filenames):
     """Builds vocabulary.
-
     Has the side effect of setting the following attributes:   
     - table_words: list of string, holding the list of vocabulary words. Index
         of each entry is the same as the word index into the vocabulary.
@@ -102,7 +98,6 @@ class Word2VecDataset(object):
     - keep_probs: list of float, holding words' keep prob for subsampling. 
         Index of each entry is the same as the word index into the vocabulary.
     - corpus_size: int scalar, effective corpus size.
-
     Args:
       filenames: list of strings, holding names of text files.
     """
@@ -124,11 +119,9 @@ class Word2VecDataset(object):
   def _build_binary_tree(self, unigram_counts):
     """Builds a Huffman tree for hierarchical softmax. Has the side effect
     of setting `max_depth`.
-
     Args:
       unigram_counts: list of int, holding word counts. Index of each entry
         is the same as the word index into the vocabulary.
-
     Returns:
       codes_points: an int numpy array of shape [vocab_size, 2*max_depth+1]
         where each row holds the codes (0-1 binary values) padded to
@@ -169,11 +162,9 @@ class Word2VecDataset(object):
   def _prepare_inputs_labels(self, tensor):
     """Set shape of `tensor` according to architecture and training algorithm,
     and split `tensor` into `inputs` and `labels`.
-
     Args:
       tensor: rank-2 int tensor, holding word indices for prediction inputs
         and prediction labels, returned by `generate_instances`.
-
     Returns:
       inputs: rank-2 int tensor, holding word indices for prediction inputs. 
       labels: rank-2 int tensor, holding word indices for prediction labels.
@@ -197,7 +188,6 @@ class Word2VecDataset(object):
 
   def get_tensor_dict(self, filenames):
     """Generates tensor dict mapping from tensor names to tensors.
-
     Args:
       filenames: list of strings, holding names of text files.
       
@@ -284,7 +274,6 @@ class Word2VecDataset(object):
 
 def get_word_indices(sent, table_words):
   """Converts a sentence into a list of word indices.
-
   Args:
     sent: a scalar string tensor, a sentence where words are space-delimited.
     table_words: a `HashTable` mapping from words (string tensor) to word 
@@ -301,11 +290,9 @@ def get_word_indices(sent, table_words):
 def subsample(indices, keep_probs):
   """Filters out-of-vocabulary words and then applies subsampling on words in a 
   sentence. Words with high frequencies have lower keep probs.
-
   Args:
     indices: rank-1 int tensor, the word indices within a sentence.
     keep_probs: rank-1 float tensor, the prob to drop the each vocabulary word. 
-
   Returns:
     indices: rank-1 int tensor, the word indices within a sentence after 
       subsampling.
@@ -322,18 +309,15 @@ def generate_instances(indices, arch, window_size, codes_points=None):
   for each sentence. The shape and contents of output matrices depends on the 
   architecture ('skip_gram', 'cbow') and training algorithm ('negative_sampling'
   , 'hierarchical_softmax').
-
   It takes as input a list of word indices in a subsampled-sentence, where each
   word is a target word, and their context words are those within the window 
   centered at a target word. For skip gram architecture, `num_context_words` 
   instances are generated for a target word, and for cbow architecture, a single
   instance is generated for a target word.
-
   If `codes_points` is not None ('hierarchical softmax'), the word to be 
   predicted (context word for 'skip_gram', and target word for 'cbow') are 
   represented by their 'codes' and 'points' in the Huffman tree (See 
   `_build_binary_tree`). 
-
   Args:
     indices: rank-1 int tensor, the word indices within a sentence after
       subsampling.
@@ -388,5 +372,4 @@ def generate_instances(indices, arch, window_size, codes_points=None):
                                   [0, init_array], back_prop=False)
 
   instances = tf.cast(result_array.concat(), tf.int64)  # 64
-
   return instances
