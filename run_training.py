@@ -12,6 +12,7 @@ vocabulary saved to /PATH/TO/OUT_DIR/vocab.txt
 """
 import os
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 
 # import project files
@@ -39,7 +40,7 @@ flags.DEFINE_integer('embed_size', 200, 'Length of word vector.')
 flags.DEFINE_integer('negatives', 10, 'Num of negative words to sample.')
 flags.DEFINE_float('power', 0.75, 'Distortion for negative sampling.')
 flags.DEFINE_float('alpha', 0.025, 'Initial learning rate to Gradient Descent.')
-flags.DEFINE_float('min_alpha', 0.004, 'Final learning rate.')
+flags.DEFINE_float('min_alpha', 0.003, 'Final learning rate and recommended Adam lr.')
 flags.DEFINE_boolean('add_bias', True, 'Whether to add bias term to dotproduct'
                                        ' between syn0 and syn1 vectors.')
 flags.DEFINE_integer('log_per_steps', 1000, 'Every `log_per_steps` steps to '
@@ -48,8 +49,8 @@ flags.DEFINE_list('filenames', None, 'Names of comma-separated input text files.
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
 flags.DEFINE_integer('seed', 777, 'Seed to fix sequence of random values.')
 flags.DEFINE_string('optim', 'Adam', 'Optimization algorithm '
-                            '(GradDescProx, GradDesc, Adam, AdaGradProx).')
-flags.DEFINE_string('decay', 'no', 'Polynomial (poly), cosine (cos) or (no).')
+                            '(GradDescProx, Adam, AdaGradProx, GradDesc).')
+flags.DEFINE_string('decay', 'cos', 'Polynomial (poly), cosine (cos) or (no).')
 
 FLAGS = flags.FLAGS
 
@@ -58,7 +59,6 @@ FLAGS = flags.FLAGS
 def main(_):
   dataset = Word2VecDataset(arch=FLAGS.arch,
                             algm=FLAGS.algm,
-                            epochs=FLAGS.epochs,
                             batch_size=FLAGS.batch_size,
                             max_vocab_size=FLAGS.max_vocab_size,
                             min_count=FLAGS.min_count,
@@ -78,15 +78,16 @@ def main(_):
                            random_seed=FLAGS.seed,
                            optim=FLAGS.optim,
                            decay=FLAGS.decay)
-  to_be_run_dict = word2vec.train(dataset, FLAGS.filenames)
+ 
+  to_be_run_dict = word2vec.train(dataset, FLAGS.filenames, 1)
   
   datatools = du.DataFileTools(out_path=FLAGS.out_dir)
 
   with tf.compat.v1.Session() as sess:
-    sess.run(dataset.iterator_initializer)
+    # sess.run(dataset.iterator_initializer)
     sess.run(tf.compat.v1.tables_initializer())
     sess.run(tf.compat.v1.global_variables_initializer())
-
+    
     print("optimizer: ", FLAGS.optim)
     print("epochs: ", FLAGS.epochs)
     print("model: ", FLAGS.arch)
@@ -102,84 +103,107 @@ def main(_):
     average_loss = 0.
     step = 0
     sub_step = 0
+    df_input_label = pd.DataFrame([], columns=["input", "label"])
+    train_epoch = 0
     
-    while True:      
-      try:
-        result_dict = sess.run(to_be_run_dict)
-      except tf.errors.OutOfRangeError:
-        break
-      
-      no_log = True
-      step += 1
-      sub_step += 1
-      average_loss += result_dict['loss'].mean()
-      op_lr = sess.run(word2vec.lr)
-      op_epoch = result_dict['op_epoch']
-      train_progress = result_dict['progress_rate']
-      
-      if step == 1:
-        # first one
-        syn0_partial = sess.run(word2vec.syn0)
-        np.save(os.path.join(FLAGS.out_dir, 'embed_' + 
-                             str(op_epoch).zfill(2)), syn0_partial)
-        del syn0_partial
-        print('-------------------- Epoch: ', op_epoch)
-        print(' average loss:', average_loss / sub_step)
-        print(' learning rate:', op_lr)
-        print(' progress:', round(train_progress,4))
-        print('------------------------------------')
-        # save first log line with the first loss and learning rate
-        flog.write("\n" + str(step) + "\t" + str(op_epoch) \
-                   + "\t" + str(average_loss / sub_step) \
-                   + "\t" + str(op_lr))
-        # save vocab with frequency
-        ff = open(os.path.join(FLAGS.out_dir, 'vocab_freq.txt'), 'w',
-                  encoding="utf-8") 
-        fw = open(os.path.join(FLAGS.out_dir, 'vocab.txt'), 'w',
-                 encoding="utf-8")
-        list_vocab = dataset.table_words
-        word_and_freq = zip(list_vocab,
-                            dataset.unigram_counts,
-                            dataset.keep_probs) 
-        for i, w_f in enumerate(word_and_freq):
-          if i > 0:
-            fw.write('\n')
-            ff.write('\n')
-          fw.write(w_f[0])
-          ff.write(w_f[0] + '\t' + str(w_f[1]) + '\t' + str(w_f[2]))
-        fw.close()
-        ff.close()
-      else:
-        divisor = FLAGS.log_per_steps
-        average_loss /= sub_step
-        if step % divisor == 0:
-          print('epoch:', op_epoch, ' step:', step)
+    for train_epoch in range(1, 1 + FLAGS.epochs):
+      sess.run(dataset.iterator_initializer)
+      while True:      
+        try:
+          result_dict = sess.run(to_be_run_dict)
+
+          if train_epoch == 1:
+            a_inputs = result_dict['inputs']
+            a_labels = result_dict['labels']
+            df_aux = pd.DataFrame({"input": a_inputs, "label": a_labels})
+            df_input_label = df_input_label.append(df_aux, ignore_index=True)
+
+        except tf.errors.OutOfRangeError:
+          break
+                  
+        no_log = True
+        step += 1
+        sub_step += 1
+        op_lr = sess.run(word2vec.lr)
+        average_loss += result_dict['loss'].mean()
+        # train_epoch = result_dict['op_epoch']
+        train_progress = result_dict['progress_rate']
+        train_progress = (train_epoch -1 + train_progress) / FLAGS.epochs
+        if step == 1:
+          # first one
+          syn0_partial = sess.run(word2vec.syn0)
+          np.save(os.path.join(FLAGS.out_dir, 'embed_' + 
+                               str(train_epoch).zfill(2)), syn0_partial)
+          del syn0_partial
+          print('-------------------- Epoch: ', train_epoch)
           print(' average loss:', average_loss)
           print(' learning rate:', op_lr)
           print(' progress:', round(train_progress,4))
           print('------------------------------------')
-          flog.write("\n" + str(step) + "\t" + str(op_epoch) \
-                          + "\t" + str(average_loss)
-                          + "\t" + str(op_lr))
-  
-          syn0_partial = sess.run(word2vec.syn0)
-          np.save(os.path.join(FLAGS.out_dir, 'embed_' +
-                               str(op_epoch).zfill(2) + "_step_" +
-                               str(step).zfill(6)), syn0_partial)
-          del syn0_partial
+          # save first log line with the first loss and learning rate
+          flog.write("\n" + str(step) + "\t" + str(train_epoch) \
+                     + "\t" + str(average_loss) \
+                     + "\t" + str(op_lr))
+          # save vocab with frequency
+          ff = open(os.path.join(FLAGS.out_dir, 'vocab_freq.txt'), 'w',
+                    encoding="utf-8") 
+          fw = open(os.path.join(FLAGS.out_dir, 'vocab.txt'), 'w',
+                   encoding="utf-8")
+          list_vocab = dataset.table_words
+          word_and_freq = zip(list_vocab,
+                              dataset.unigram_counts,
+                              dataset.keep_probs) 
+          for i, w_f in enumerate(word_and_freq):
+            if i > 0:
+              fw.write('\n')
+              ff.write('\n')
+            fw.write(w_f[0])
+            ff.write(w_f[0] + '\t' + str(w_f[1]) + '\t' + str(w_f[2]))
+          fw.close()
+          ff.close()
+          
           average_loss = 0.
           sub_step = 0
-          no_log = False
-      
+        else:
+          divisor = FLAGS.log_per_steps
+          if step % divisor == 0:
+            print('epoch:', train_epoch, ' step:', step)
+            print(' average loss:', average_loss / sub_step)
+            print(' learning rate:', op_lr)
+            print(' progress:', round(train_progress,4))
+            print('------------------------------------')
+            flog.write("\n" + str(step) + "\t" + str(train_epoch) \
+                            + "\t" + str(average_loss / sub_step)
+                            + "\t" + str(op_lr))
+    
+            syn0_partial = sess.run(word2vec.syn0)
+            np.save(os.path.join(FLAGS.out_dir, 'embed_' +
+                                 str(train_epoch).zfill(2) + "_step_" +
+                                 str(step).zfill(6)), syn0_partial)
+            del syn0_partial
+            average_loss = 0.
+            sub_step = 0
+            no_log = False
+      # while end
+      average_loss = 0.
+      sub_step = 0
+      if train_epoch == 1:
+          del df_aux
+          fname = FLAGS.arch + "_" + FLAGS.algm + "_" + FLAGS.algm + \
+                               "_win" + str(FLAGS.window_size)
+          store = pd.HDFStore(du.path_file(fname + '.h5', subfolder=FLAGS.out_dir), "w")
+          store['FLAGS.archdf_input_label'] = df_input_label
+          store.close()
+          del df_input_label
+    # for end
     if no_log:
       if sub_step > 0:
-        average_loss /= sub_step
-        print('epoch:', op_epoch, ' step:', step) 
-        print(' average loss:', average_loss)
+        print('epoch:', train_epoch, ' step:', step) 
+        print(' average loss:', average_loss / sub_step)
         print(' learning rate:', op_lr)
         print(' progress:', 1.)
-        flog.write("\n" + str(step) + "\t" + str(op_epoch) \
-                                    + "\t" + str(average_loss) \
+        flog.write("\n" + str(step) + "\t" + str(train_epoch) \
+                                    + "\t" + str(average_loss / sub_step) \
                                     + "\t" + str(op_lr))
     flog.close()
     
