@@ -42,12 +42,14 @@ class Word2VecModel(object):
     self._random_seed = random_seed
     self._optim = optim
     self._decay = decay
+    self._inputs = None
+    self._labels = None
     
     self._syn0 = None
     
     if optim == 'Adam':
-      #  self._lr = 0.002  is get better results than 0.001 and 0.003
-      self._lr = 0.001
+      # 0.003 is recommended
+      self._lr = self_min_alpha
     else:
       self._lr = alpha
 
@@ -101,14 +103,17 @@ class Word2VecModel(object):
           'progress_rate': float with progress rate
           }
     """
+    global_step = tf.compat.v1.train.get_or_create_global_step()
+    
     tensor_dict = dataset.get_tensor_dict(filenames, epochs)
     inputs, labels = tensor_dict['inputs'], tensor_dict['labels']
-    op_epoch = tf.int32(tensor_dict['epoch'][0])
+    # self._inputs = inputs
+    # self._labels = labels
+    op_epoch = tensor_dict['epoch'][0]
     op_epoch = tf.identity(op_epoch, name='op_epoch')
     
     # instead of global step, progress rate is used to calculate learning rate
-    global_step = tf.compat.v1.train.get_or_create_global_step()
-    progress_rate = tf.to_float(tensor_dict['progress'][0])
+    progress_rate = tensor_dict['progress'][0]
     progress_rate = tf.identity(progress_rate, name='progress_rate')
     
     # learning rate
@@ -149,11 +154,12 @@ class Word2VecModel(object):
     else:
       optimizer = tf.compat.v1.train.GradientDescentOptimizer(self._lr)
       
-    grad_update_op = optimizer.minimize(func_loss, global_step=global_step,
+    grad_update_op = optimizer.minimize(func_loss,
+                                        global_step=global_step,
                                         name='grad_update_op')
-    
     to_be_run_dict = {'grad_update_op': grad_update_op,  
                       'loss': func_loss,
+                      'inputs': inputs, 'labels': labels,
                       'progress_rate': progress_rate,
                       'op_epoch': op_epoch}
     return to_be_run_dict
@@ -166,6 +172,11 @@ class Word2VecModel(object):
       scope: string scalar, scope name.
 
     Returns:
+    while True:      
+      try:
+        result_dict = sess.run(to_be_run_dict)
+      except tf.errors.OutOfRangeError:
+        break
       syn0: float tensor of shape [vocab_size, embed_size], input word 
         embeddings (i.e. weights of hidden layer).
       syn1: float tensor of shape [syn1_rows, embed_size], output word
@@ -182,7 +193,7 @@ class Word2VecModel(object):
                         seed=self._random_seed))
       syn1 = tf.compat.v1.get_variable(
           'syn1', initializer=tf.random.uniform([syn1_rows,
-          self._embed_size], -0.1, 0.1))
+          self._embed_size], -0.1, 0.1, seed=self_random_seed))
       biases = tf.compat.v1.get_variable('biases', 
                                          initializer=tf.zeros([syn1_rows]))
     return syn0, syn1, biases
@@ -296,7 +307,7 @@ class Word2VecModel(object):
             tf.reduce_mean(tf.gather(syn0, context_words[:true_size]), axis=0))
       inputs_syn0 = tf.stack(inputs_syn0)
     return inputs_syn0
-
+  
 
 class WordVectors(object):
   """Word vectors of trained Word2Vec model. Provides APIs for retrieving
@@ -348,4 +359,3 @@ class WordVectors(object):
         heapq.heapify(min_pq)
     min_pq = sorted(min_pq, key=lambda p: -p[0])
     return [(self._vocab[i], sim) for sim, i in min_pq[1:]]
-
