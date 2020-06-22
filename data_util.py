@@ -75,7 +75,7 @@ class DataFileTools(object):
     return True
   
   def save_embed_proj(self, array_embed, list_vocab, path_embed=None,
-                      fname='embeddings'):
+                      fname='embed'):
     if path_embed is None:
       path_embed = self.out_path
       
@@ -83,18 +83,18 @@ class DataFileTools(object):
     df_embed = pd.DataFrame(array_embed, index=list_vocab)
     
     # save it in HDF5
-    store = pd.HDFStore(path_file(fname + '.h5', subfolder=path_embed))
+    store = pd.HDFStore(path_file(fname + '.h5', subfolder=path_embed), 'w')
     store['df_embed'] = df_embed
     store.close()
     
     # save vector to Google project, for instance
-    file_vec = path_file(fname + '.vec', subfolder=path_embed)
+    file_vec = path_file(fname + "_vec" + '.tsv', subfolder=path_embed)
     df_embed.to_csv(file_vec, sep='\t', header=False, index=False)
     # remove last blank line in vector file
     self.remove_last_empty(file_vec)
     
     # create label file
-    file_vec = path_file('project_embed.lbl', subfolder=path_embed)
+    file_vec = path_file(fname + "_lbl" + '.tsv', subfolder=path_embed)
     with open(file_vec, 'w', encoding="utf-8") as fw:
       for i, w in enumerate(list_vocab):
         if i > 0: fw.write('\n' + w)
