@@ -49,7 +49,7 @@ class Word2VecModel(object):
     
     if optim == 'Adam':
       # 0.003 is recommended
-      self._lr = self_min_alpha
+      self._lr = self._min_alpha
     else:
       self._lr = alpha
 
@@ -88,7 +88,7 @@ class Word2VecModel(object):
             inputs, labels, syn0, syn1, biases)
       return loss
 
-  def train(self, dataset, filenames, epochs):
+  def train(self, dataset, filenames, epochs, to_train=True):
     """Adds training related ops to the graph.
 
     Args:
@@ -100,6 +100,7 @@ class Word2VecModel(object):
         the following entries:
         { 'grad_update_op': optimization ops,
           'loss': cross entropy loss,
+          'inputs': inputs, 'labels': labels,
           'progress_rate': float with progress rate
           }
     """
@@ -107,8 +108,6 @@ class Word2VecModel(object):
     
     tensor_dict = dataset.get_tensor_dict(filenames, epochs)
     inputs, labels = tensor_dict['inputs'], tensor_dict['labels']
-    # self._inputs = inputs
-    # self._labels = labels
     op_epoch = tensor_dict['epoch'][0]
     op_epoch = tf.identity(op_epoch, name='op_epoch')
     
@@ -136,7 +135,6 @@ class Word2VecModel(object):
     self._lr = tf.to_float(learning_rate)
 
     loss = self._build_loss(inputs, labels, dataset.unigram_counts)
-    func_loss = tf.identity(loss, name='func_loss')
     
     # optimizer
     if self._optim == 'Adam':
@@ -154,11 +152,12 @@ class Word2VecModel(object):
     else:
       optimizer = tf.compat.v1.train.GradientDescentOptimizer(self._lr)
       
-    grad_update_op = optimizer.minimize(func_loss,
+    grad_update_op = optimizer.minimize(loss,
                                         global_step=global_step,
                                         name='grad_update_op')
+    
     to_be_run_dict = {'grad_update_op': grad_update_op,  
-                      'loss': func_loss,
+                      'loss': loss,
                       'inputs': inputs, 'labels': labels,
                       'progress_rate': progress_rate,
                       'op_epoch': op_epoch}
@@ -193,7 +192,7 @@ class Word2VecModel(object):
                         seed=self._random_seed))
       syn1 = tf.compat.v1.get_variable(
           'syn1', initializer=tf.random.uniform([syn1_rows,
-          self._embed_size], -0.1, 0.1, seed=self_random_seed))
+          self._embed_size], -0.1, 0.1, seed=self._random_seed))
       biases = tf.compat.v1.get_variable('biases', 
                                          initializer=tf.zeros([syn1_rows]))
     return syn0, syn1, biases
