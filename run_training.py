@@ -26,24 +26,24 @@ flags = tf.app.flags
 flags.DEFINE_string('arch', 'skip_gram', 'Architecture (skip_gram or cbow).')
 flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
     '(negative_sampling or hierarchical_softmax).')
-flags.DEFINE_integer('epochs', 10, 'Num of epochs to iterate training data.')
-flags.DEFINE_integer('batch_size', 300, 'Batch size.')
+flags.DEFINE_integer('epochs', 1, 'Num of epochs to iterate training data.')
+flags.DEFINE_integer('batch_size', 250, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
                      'If > 0, the top `max_vocab_size` most frequent words'
                      ' are kept in vocabulary.')
-flags.DEFINE_integer('min_count', 2, 'Words whose counts < `min_count` are not'
+flags.DEFINE_integer('min_count', 4, 'Words whose counts < `min_count` are not'
                                      ' included in the vocabulary.')
 flags.DEFINE_float('sample', 0.0007, 'Subsampling rate.')
 flags.DEFINE_integer('window_size', 6, 'Num of words on the left or right side' 
                                        ' of target word within a window.')
-flags.DEFINE_integer('embed_size', 200, 'Length of word vector.')
+flags.DEFINE_integer('embed_size', 128, 'Length of word vector.')
 flags.DEFINE_integer('negatives', 10, 'Num of negative words to sample.')
 flags.DEFINE_float('power', 0.75, 'Distortion for negative sampling.')
 flags.DEFINE_float('alpha', 0.025, 'Initial learning rate to Gradient Descent.')
 flags.DEFINE_float('min_alpha', 0.003, 'Final learning rate and recommended Adam lr.')
 flags.DEFINE_boolean('add_bias', True, 'Whether to add bias term to dotproduct'
                                        ' between syn0 and syn1 vectors.')
-flags.DEFINE_integer('log_per_steps', 1000, 'Every `log_per_steps` steps to '
+flags.DEFINE_integer('log_per_steps', 500, 'Every `log_per_steps` steps to '
                                             ' output logs.')
 flags.DEFINE_list('filenames', None, 'Names of comma-separated input text files.')
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
@@ -53,7 +53,6 @@ flags.DEFINE_string('optim', 'Adam', 'Optimization algorithm '
 flags.DEFINE_string('decay', 'cos', 'Polynomial (poly), cosine (cos) or (no).')
 
 FLAGS = flags.FLAGS
-
 
 # ================== main ================== 
 def main(_):
@@ -78,10 +77,12 @@ def main(_):
                            random_seed=FLAGS.seed,
                            optim=FLAGS.optim,
                            decay=FLAGS.decay)
- 
+  
   to_be_run_dict = word2vec.train(dataset, FLAGS.filenames, 1)
   
   datatools = du.DataFileTools(out_path=FLAGS.out_dir)
+
+# ================== session ==================
 
   with tf.compat.v1.Session() as sess:
     # sess.run(dataset.iterator_initializer)
@@ -92,6 +93,12 @@ def main(_):
     print("epochs: ", FLAGS.epochs)
     print("model: ", FLAGS.arch)
     print("strategy : ", FLAGS.algm)
+    
+    list_vocab = dataset.table_words
+    word_and_freq = zip(list_vocab,
+                    dataset.unigram_counts,
+                    dataset.keep_probs) 
+    datatools.save_vocab(word_and_freq)
     
     # open log file
     log_arq = "log_" + FLAGS.optim + "_" + FLAGS.arch + "_" + FLAGS.algm \
@@ -111,7 +118,6 @@ def main(_):
       while True:      
         try:
           result_dict = sess.run(to_be_run_dict)
-
           if train_epoch == 1:
             a_inputs = result_dict['inputs']
             a_labels = result_dict['labels']
@@ -143,25 +149,7 @@ def main(_):
           # save first log line with the first loss and learning rate
           flog.write("\n" + str(step) + "\t" + str(train_epoch) \
                      + "\t" + str(average_loss) \
-                     + "\t" + str(op_lr))
-          # save vocab with frequency
-          ff = open(os.path.join(FLAGS.out_dir, 'vocab_freq.txt'), 'w',
-                    encoding="utf-8") 
-          fw = open(os.path.join(FLAGS.out_dir, 'vocab.txt'), 'w',
-                   encoding="utf-8")
-          list_vocab = dataset.table_words
-          word_and_freq = zip(list_vocab,
-                              dataset.unigram_counts,
-                              dataset.keep_probs) 
-          for i, w_f in enumerate(word_and_freq):
-            if i > 0:
-              fw.write('\n')
-              ff.write('\n')
-            fw.write(w_f[0])
-            ff.write(w_f[0] + '\t' + str(w_f[1]) + '\t' + str(w_f[2]))
-          fw.close()
-          ff.close()
-          
+                     + "\t" + str(op_lr))          
           average_loss = 0.
           sub_step = 0
         else:
@@ -189,10 +177,14 @@ def main(_):
       sub_step = 0
       if train_epoch == 1:
           del df_aux
-          fname = FLAGS.arch + "_" + FLAGS.algm + "_" + FLAGS.algm + \
-                               "_win" + str(FLAGS.window_size)
-          store = pd.HDFStore(du.path_file(fname + '.h5', subfolder=FLAGS.out_dir), "w")
-          store['FLAGS.archdf_input_label'] = df_input_label
+          df_vocab = pd.DataFrame(list_vocab, columns=["words"])
+          fname = "InputsLabels_" + FLAGS.arch + "_" + \
+                  {True: "ns", False: "hs"}[FLAGS.algm=="negative_sampling"] + \
+                  "_window" + str(FLAGS.window_size)
+          store = pd.HDFStore(du.path_file(fname + '.h5',
+                                           subfolder=FLAGS.out_dir), "w")
+          store['df_input_label'] = df_input_label
+          store['df_vocab'] = df_vocab
           store.close()
           del df_input_label
     # for end

@@ -3,6 +3,7 @@ import itertools
 import collections
 
 import numpy as np
+import re
 import tensorflow as tf
 
 from functools import partial
@@ -50,6 +51,8 @@ class Word2VecDataset(object):
     self._keep_probs = None
     self._corpus_size = None
     self._max_depth = None
+    
+    self._focus = None
 
   @property
   def iterator_initializer(self):
@@ -67,6 +70,14 @@ class Word2VecDataset(object):
   def keep_probs(self):
     return self._keep_probs
 
+  @property
+  def focus(self):
+    return self._focus
+  
+  @focus.setter
+  def focus(self, focus):
+    self._focus = focus
+
   def _build_raw_vocab(self, filenames):
     """Builds raw vocabulary.
     Args:
@@ -75,11 +86,20 @@ class Word2VecDataset(object):
       raw_vocab: a list of 2-tuples holding the word (string) and count (int),
         sorted in descending order of word count. 
     """
+    protect_ini = u"\uFF5F"         # "｟"  # U+FF5F
+    protect_end = u"\uFF60"         # "｠"  # U+FF60
+    connector = u"\uffed"           # "￭"
+    spacer = u"\u2581"              # "▁"
+    regex = r"｟[^｠]*｠"
+    
     map_open = partial(open, encoding="utf-8")
     lines = itertools.chain(*map(map_open, filenames))
     raw_vocab = collections.Counter()
     for line in lines:
-      raw_vocab.update(line.strip().split())
+      line = re.sub(regex, "", line)
+      line = line.replace(connector, "")
+      line = line.replace(spacer, "").strip()
+      raw_vocab.update(line.split())
     raw_vocab = raw_vocab.most_common()
     if self._max_vocab_size > 0:
       raw_vocab = raw_vocab[:self._max_vocab_size]
@@ -170,20 +190,23 @@ class Word2VecDataset(object):
       if self._algm == 'negative_sampling':
         tensor.set_shape([self._batch_size, 2])
       else:
+        # hierarchical_softmax
         tensor.set_shape([self._batch_size, 2 * self._max_depth + 2])
       inputs = tensor[:, :1]
       labels = tensor[:, 1:]
     else:
+      # cbow
       if self._algm == 'negative_sampling':
         tensor.set_shape([self._batch_size, 2 * self._window_size + 2])
       else:
+        # hierarchical_softmax
         tensor.set_shape([self._batch_size, 
-            2 * self._window_size + 2 * self._max_depth+2])
+            2 * self._window_size + 2 * self._max_depth + 2])
       inputs = tensor[:, : 2 * self._window_size + 1]
       labels = tensor[:, 2 * self._window_size + 1:]
     return inputs, labels
 
-  def get_tensor_dict(self, filenames, epochs):
+  def get_tensor_dict(self, filenames, epochs=1):
     """Generates tensor dict mapping from tensor names to tensors.
     Args:
       filenames: list of strings, holding names of text files.
@@ -220,8 +243,7 @@ class Word2VecDataset(object):
         tf.constant(table_words), default_value=OOV_ID)
     keep_probs = tf.constant(keep_probs)
 
-    num_sents = sum([len(list(open(fn, encoding="utf-8")
-                              )) for fn in filenames])
+    num_sents = sum([len(list(open(fn, encoding="utf-8"))) for fn in filenames])
     num_sents = epochs * num_sents
     
     # include epoch number, like progress
@@ -256,7 +278,8 @@ class Word2VecDataset(object):
     
     iterator = tf.compat.v1.data.make_initializable_iterator(dataset)
     self._iterator_initializer = iterator.initializer
-    tensor, progress, epoch = iterator.get_next()
+    self._iterator_next = iterator.get_next()
+    tensor, progress, epoch = self._iterator_next
     progress.set_shape([self._batch_size])
     epoch.set_shape([self._batch_size])
 

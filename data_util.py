@@ -7,7 +7,8 @@ Data File Tools
 import pandas as pd
 import os
 
-curr_path = os.path.dirname(os.path.abspath(__file__))
+def work_dir():
+  return os.path.dirname(os.path.abspath(__file__))
 
 def path_file(fname, subfolder=None, full_path=None):
   if (fname is None):
@@ -18,6 +19,8 @@ def path_file(fname, subfolder=None, full_path=None):
     return os.path.join(full_path, fname)
   else:
     return os.path.join(full_path, subfolder, fname)
+
+curr_path = work_dir() 
 
 class DataFileTools(object):
   """ Data file tools.
@@ -77,7 +80,7 @@ class DataFileTools(object):
   def save_embed_proj(self, array_embed, list_vocab, path_embed=None,
                       fname='embed'):
     if path_embed is None:
-      path_embed = self.out_path
+      path_embed = self._out_path
       
     # create dataframe
     df_embed = pd.DataFrame(array_embed, index=list_vocab)
@@ -100,3 +103,20 @@ class DataFileTools(object):
         if i > 0: fw.write('\n' + w)
         else: fw.write(w)
       fw.close()
+
+  def save_vocab(self, word_and_freq, path_vocab=None):
+    if path_vocab is None:
+      path_vocab = self._out_path
+    # save vocab with frequency
+    ff = open(os.path.join(path_vocab, 'vocab_freq.txt'), 'w',
+              encoding="utf-8") 
+    fw = open(os.path.join(path_vocab, 'vocab.txt'), 'w',
+             encoding="utf-8")
+    for i, w_f in enumerate(word_and_freq):
+      if i == 0:
+        fw.write('index\tword')              
+        ff.write('word\tfreq\tkeep')
+      fw.write('\n' + str(i) + '\t' + w_f[0])
+      ff.write('\n' + w_f[0] + '\t' + str(w_f[1]) + '\t' + str(w_f[2]))
+    fw.close()
+    ff.close()
