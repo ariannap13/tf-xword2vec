@@ -86,7 +86,7 @@ class Word2VecDataset(object):
     return self._focus
   
   @focus.setter
-  def focus(self, focus=""):
+  def set_focus(self, focus=""):
     if isinstance(focus, str): self._focus = focus
     else: focus = ""
 
@@ -247,19 +247,20 @@ class Word2VecDataset(object):
         tf.constant(table_words), default_value=OOV_ID)
     keep_probs = tf.constant(keep_probs)
 
-    self._focus = "recurso"
-    if self._focus == "": 
-      comb_file = filenames
-    else:
+    comb_file = filenames
+    if self._focus != "": 
+      num_sents = 0
       comb_file = "partial_data_focus_" + self._focus + ".txt"
       fo = open(comb_file, "w", encoding="utf-8")
       for fn in filenames:
         for line in list(open(fn, encoding="utf-8")):
           line = remove_tokens(line)
           if self._focus in line:
+            num_sents += 1
             fo.write(line)
       fo.close()
-      comb_file = [comb_file]
+      if num_sents > 1:
+        comb_file = [comb_file]
             
     num_sents = sum([len(list(open(fn, encoding="utf-8"))) for fn in comb_file])
       
