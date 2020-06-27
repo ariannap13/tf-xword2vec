@@ -3,12 +3,23 @@ import itertools
 import collections
 
 import numpy as np
-import re
 import tensorflow as tf
 
 from functools import partial
 
 OOV_ID = -1
+
+def remove_tokens(line):
+  import re
+  protect_ini = u"\uFF5F"         # "｟"  # U+FF5F
+  protect_end = u"\uFF60"         # "｠"  # U+FF60
+  connector = u"\uffed"           # "￭"
+  spacer = u"\u2581"              # "▁"
+  regex = protect_ini + "[^" + protect_end + "]*" + protect_end
+  line = re.sub(regex, "", line)
+  line = line.replace(connector, "")
+  line = line.replace(spacer, "")
+  return line
 
 class Word2VecDataset(object):
   """Dataset for generating matrices holding word indices to train Word2Vec 
@@ -52,8 +63,8 @@ class Word2VecDataset(object):
     self._corpus_size = None
     self._max_depth = None
     
-    self._focus = None
-
+    self._focus = ""
+    
   @property
   def iterator_initializer(self):
     return self._iterator_initializer
@@ -75,8 +86,9 @@ class Word2VecDataset(object):
     return self._focus
   
   @focus.setter
-  def focus(self, focus):
-    self._focus = focus
+  def focus(self, focus=""):
+    if isinstance(focus, str): self._focus = focus
+    else: focus = ""
 
   def _build_raw_vocab(self, filenames):
     """Builds raw vocabulary.
@@ -86,20 +98,12 @@ class Word2VecDataset(object):
       raw_vocab: a list of 2-tuples holding the word (string) and count (int),
         sorted in descending order of word count. 
     """
-    protect_ini = u"\uFF5F"         # "｟"  # U+FF5F
-    protect_end = u"\uFF60"         # "｠"  # U+FF60
-    connector = u"\uffed"           # "￭"
-    spacer = u"\u2581"              # "▁"
-    regex = r"｟[^｠]*｠"
-    
     map_open = partial(open, encoding="utf-8")
     lines = itertools.chain(*map(map_open, filenames))
     raw_vocab = collections.Counter()
     for line in lines:
-      line = re.sub(regex, "", line)
-      line = line.replace(connector, "")
-      line = line.replace(spacer, "").strip()
-      raw_vocab.update(line.split())
+      line = remove_tokens(line)
+      raw_vocab.update(line.strip().split())
     raw_vocab = raw_vocab.most_common()
     if self._max_vocab_size > 0:
       raw_vocab = raw_vocab[:self._max_vocab_size]
@@ -243,11 +247,27 @@ class Word2VecDataset(object):
         tf.constant(table_words), default_value=OOV_ID)
     keep_probs = tf.constant(keep_probs)
 
-    num_sents = sum([len(list(open(fn, encoding="utf-8"))) for fn in filenames])
+    self._focus = "recurso"
+    if self._focus == "": 
+      comb_file = filenames
+    else:
+      comb_file = "partial_data_focus_" + self._focus + ".txt"
+      fo = open(comb_file, "w", encoding="utf-8")
+      for fn in filenames:
+        for line in list(open(fn, encoding="utf-8")):
+          line = remove_tokens(line)
+          if self._focus in line:
+            fo.write(line)
+      fo.close()
+      comb_file = [comb_file]
+            
+    num_sents = sum([len(list(open(fn, encoding="utf-8"))) for fn in comb_file])
+      
+    assert num_sents > 0
     num_sents = epochs * num_sents
     
     # include epoch number, like progress
-    a_zip = tf.data.TextLineDataset(filenames).repeat(epochs)
+    a_zip = tf.data.TextLineDataset(comb_file).repeat(epochs)
     b_zip = tf.range(1, 1 + num_sents) / num_sents
     c_zip = tf.repeat(tf.range(1, 1+epochs), int(num_sents / epochs))
     
