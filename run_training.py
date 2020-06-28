@@ -28,8 +28,8 @@ flags = tf.app.flags
 flags.DEFINE_string('arch', 'skip_gram', 'Architecture (skip_gram or cbow).')
 flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
     '(negative_sampling or hierarchical_softmax).')
-flags.DEFINE_integer('epochs', 2, 'Num of epochs to iterate training data.')
-flags.DEFINE_integer('batch_size', 512, 'Batch size.')
+flags.DEFINE_integer('epochs', 1, 'Num of epochs to iterate training data.')
+flags.DEFINE_integer('batch_size', 1024, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
                      'If > 0, the top `max_vocab_size` most frequent words'
                      ' are kept in vocabulary.')
@@ -39,7 +39,7 @@ flags.DEFINE_float('sample', 0.0007, 'Subsampling rate.')
 flags.DEFINE_integer('window_size', 6, 'Num of words on the left or right side' 
                                        ' of target word within a window.')
 flags.DEFINE_integer('embed_size', 128, 'Length of word vector.')
-flags.DEFINE_integer('negatives', 10, 'Num of negative words to sample.')
+flags.DEFINE_integer('negatives', 20, 'Num of negative words to sample.')
 flags.DEFINE_float('power', 0.75, 'Distortion for negative sampling.')
 flags.DEFINE_float('alpha', 0.025, 'Initial learning rate to Gradient Descent.')
 flags.DEFINE_float('min_alpha', 0.003, 'Final learning rate and recommended Adam lr.')
