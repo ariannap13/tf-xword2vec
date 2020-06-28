@@ -32,7 +32,8 @@ class Word2VecDataset(object):
                max_vocab_size=0,
                min_count=2,
                sample=1e-3,
-               window_size=5):
+               window_size=5,
+               special_tokens=0):
     """Constructor.
     Args:
       arch: string scalar, architecture ('skip_gram' or 'cbow').
@@ -47,6 +48,9 @@ class Word2VecDataset(object):
       sample: float scalar, subsampling rate.
       window_size: int scalar, num of words on the left or right side of
         target word within a window.
+      special_tokens: int scalar, that is converted to boolean. If zero, there is
+        not any special token in the data. Else, the special tokens will be removed,
+        considering the special tokens used in pyonmttok tokenizer.
     """
     self._arch = arch
     self._algm = algm
@@ -55,6 +59,7 @@ class Word2VecDataset(object):
     self._min_count = min_count
     self._sample = sample
     self._window_size = window_size
+    self._special_tokens = True if special_tokens else False
 
     self._iterator_initializer = None
     self._table_words = None
@@ -86,9 +91,8 @@ class Word2VecDataset(object):
     return self._focus
   
   @focus.setter
-  def set_focus(self, focus=""):
-    if isinstance(focus, str): self._focus = focus
-    else: focus = ""
+  def focus(self, v):
+    self._focus = v
 
   def _build_raw_vocab(self, filenames):
     """Builds raw vocabulary.
@@ -102,7 +106,7 @@ class Word2VecDataset(object):
     lines = itertools.chain(*map(map_open, filenames))
     raw_vocab = collections.Counter()
     for line in lines:
-      line = remove_tokens(line)
+      if self._special_tokens: line = remove_tokens(line)
       raw_vocab.update(line.strip().split())
     raw_vocab = raw_vocab.most_common()
     if self._max_vocab_size > 0:
@@ -247,24 +251,26 @@ class Word2VecDataset(object):
         tf.constant(table_words), default_value=OOV_ID)
     keep_probs = tf.constant(keep_probs)
 
-    comb_file = filenames
-    if self._focus != "": 
-      num_sents = 0
-      comb_file = "partial_data_focus_" + self._focus + ".txt"
+    if self._special_tokens:
+      if self._focus == "":
+        comb_file = "full_without_special_tokens.txt"
+      else: comb_file = "partial_data_focus_" + self._focus + ".txt"
       fo = open(comb_file, "w", encoding="utf-8")
       for fn in filenames:
         for line in list(open(fn, encoding="utf-8")):
           line = remove_tokens(line)
-          if self._focus in line:
-            num_sents += 1
+          if self._focus == "": 
+            fo.write(line)
+          elif self._focus in line:
             fo.write(line)
       fo.close()
-      if num_sents > 1:
-        comb_file = [comb_file]
-            
+      comb_file = [comb_file]
+    else:
+      comb_file = filenames
+      
     num_sents = sum([len(list(open(fn, encoding="utf-8"))) for fn in comb_file])
       
-    assert num_sents > 0
+    assert num_sents > 1
     num_sents = epochs * num_sents
     
     # include epoch number, like progress

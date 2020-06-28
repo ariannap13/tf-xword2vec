@@ -13,6 +13,8 @@ vocabulary saved to /PATH/TO/OUT_DIR/vocab.txt
 import os
 import numpy as np
 import pandas as pd
+pd.set_option('io.hdf.default_format','table')
+
 import tensorflow as tf
 
 # import project files
@@ -26,8 +28,8 @@ flags = tf.app.flags
 flags.DEFINE_string('arch', 'skip_gram', 'Architecture (skip_gram or cbow).')
 flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
     '(negative_sampling or hierarchical_softmax).')
-flags.DEFINE_integer('epochs', 1, 'Num of epochs to iterate training data.')
-flags.DEFINE_integer('batch_size', 250, 'Batch size.')
+flags.DEFINE_integer('epochs', 2, 'Num of epochs to iterate training data.')
+flags.DEFINE_integer('batch_size', 512, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
                      'If > 0, the top `max_vocab_size` most frequent words'
                      ' are kept in vocabulary.')
@@ -48,9 +50,11 @@ flags.DEFINE_integer('log_per_steps', 500, 'Every `log_per_steps` steps to '
 flags.DEFINE_list('filenames', None, 'Names of comma-separated input text files.')
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
 flags.DEFINE_integer('seed', 777, 'Seed to fix sequence of random values.')
-flags.DEFINE_string('optim', 'Adam', 'Optimization algorithm '
+flags.DEFINE_string('optim', 'GradDescProx', 'Optimization algorithm '
                             '(GradDescProx, Adam, AdaGradProx, GradDesc).')
 flags.DEFINE_string('decay', 'cos', 'Polynomial (poly), cosine (cos) or (no).')
+flags.DEFINE_integer('special_tokens', 1, 'Whether to remove special tokens from'
+                                       ' data files.')
 
 FLAGS = flags.FLAGS
 
@@ -62,7 +66,9 @@ def main(_):
                             max_vocab_size=FLAGS.max_vocab_size,
                             min_count=FLAGS.min_count,
                             sample=FLAGS.sample,
-                            window_size=FLAGS.window_size)
+                            window_size=FLAGS.window_size,
+                            special_tokens=FLAGS.special_tokens)
+    
   dataset.build_vocab(FLAGS.filenames)
 
   word2vec = Word2VecModel(arch=FLAGS.arch,
@@ -77,7 +83,8 @@ def main(_):
                            random_seed=FLAGS.seed,
                            optim=FLAGS.optim,
                            decay=FLAGS.decay)
-  
+
+  dataset.focus = ""
   to_be_run_dict = word2vec.train(dataset, FLAGS.filenames, 1)
   
   datatools = du.DataFileTools(out_path=FLAGS.out_dir)
@@ -93,7 +100,7 @@ def main(_):
     print("epochs: ", FLAGS.epochs)
     print("model: ", FLAGS.arch)
     print("strategy : ", FLAGS.algm)
-    
+    print("word in focus: ", dataset.focus)
     list_vocab = dataset.table_words
     word_and_freq = zip(list_vocab,
                     dataset.unigram_counts,
@@ -106,12 +113,17 @@ def main(_):
     flog = open(du.path_file(log_arq, subfolder=FLAGS.out_dir), "w",
                 encoding="utf-8")
     flog.write("Step\tEpoch\tAverageLoss\tLearningRate")
+    
+    # open H5 store file
+    fname = "InputsLabels_" + FLAGS.arch + "_" + \
+        {True: "ns", False: "hs"}[FLAGS.algm=="negative_sampling"] + \
+        "_window" + str(FLAGS.window_size) + ".h5"
+    storeh5 = pd.HDFStore(fname, mode="w", complevel=2, complib='blosc')
 
-    average_loss = 0.
     step = 0
     sub_step = 0
-    df_input_label = pd.DataFrame([], columns=["input", "label"])
     train_epoch = 0
+    average_loss = 0.
     
     for train_epoch in range(1, 1 + FLAGS.epochs):
       sess.run(dataset.iterator_initializer)
@@ -119,11 +131,14 @@ def main(_):
         try:
           result_dict = sess.run(to_be_run_dict)
           if train_epoch == 1:
-            a_inputs = result_dict['inputs']
-            a_labels = result_dict['labels']
-            df_aux = pd.DataFrame({"input": a_inputs, "label": a_labels})
-            df_input_label = df_input_label.append(df_aux, ignore_index=True)
-
+            if FLAGS.arch == 'skip_gram':
+              a_inputs = result_dict['inputs']
+              a_labels = result_dict['labels']
+              df_input_label = pd.DataFrame({"input": a_inputs, "label": a_labels})              
+              storeh5.append("tb_word", df_input_label, data_columns=["input", "label"],
+                             format="t", append=True, 
+                             min_itemsize={'input': 50, 'label': 50})                               
+              
         except tf.errors.OutOfRangeError:
           break
                   
@@ -173,20 +188,12 @@ def main(_):
             sub_step = 0
             no_log = False
       # while end
-      average_loss = 0.
-      sub_step = 0
       if train_epoch == 1:
-          del df_aux
-          df_vocab = pd.DataFrame(list_vocab, columns=["words"])
-          fname = "InputsLabels_" + FLAGS.arch + "_" + \
-                  {True: "ns", False: "hs"}[FLAGS.algm=="negative_sampling"] + \
-                  "_window" + str(FLAGS.window_size)
-          store = pd.HDFStore(du.path_file(fname + '.h5',
-                                           subfolder=FLAGS.out_dir), "w")
-          store['df_input_label'] = df_input_label
-          store['df_vocab'] = df_vocab
-          store.close()
+        if FLAGS.arch == 'skip_gram':
           del df_input_label
+        df_vocab = pd.DataFrame(list_vocab, columns=["words"])
+        storeh5['df_vocab'] = df_vocab
+        storeh5.close()
     # for end
     if no_log:
       if sub_step > 0:
