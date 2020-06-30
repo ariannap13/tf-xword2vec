@@ -1,7 +1,7 @@
 import heapq
 import itertools
 import collections
-
+import string
 import numpy as np
 import tensorflow as tf
 
@@ -17,9 +17,11 @@ def remove_tokens(line):
   spacer = u"\u2581"              # "▁"
   regex = protect_ini + "[^" + protect_end + "]*" + protect_end
   line = re.sub(regex, "", line)
-  line = line.replace('"', " ")
+  line = line.replace('"', "")
   line = line.replace(connector, "")
   line = line.replace(spacer, "")
+  if not set(string.ascii_lowercase).intersection(line.lower()):
+    line = ""
   return line
 
 class Word2VecDataset(object):
@@ -107,7 +109,9 @@ class Word2VecDataset(object):
     lines = itertools.chain(*map(map_open, filenames))
     raw_vocab = collections.Counter()
     for line in lines:
-      if self._special_tokens: line = remove_tokens(line)
+      if self._special_tokens: 
+        line = remove_tokens(line)
+        if line.strip() == "": continue
       raw_vocab.update(line.strip().split())
     raw_vocab = raw_vocab.most_common()
     if self._max_vocab_size > 0:
