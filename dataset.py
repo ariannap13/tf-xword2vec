@@ -72,6 +72,7 @@ class Word2VecDataset(object):
     self._max_depth = None
     
     self._focus = ""
+    self._clean_filenames = "clean_filenames.txt"
     
   @property
   def iterator_initializer(self):
@@ -95,7 +96,7 @@ class Word2VecDataset(object):
   
   @focus.setter
   def focus(self, v):
-    self._focus = v
+    self._focus = str(v)
 
   def _build_raw_vocab(self, filenames):
     """Builds raw vocabulary.
@@ -108,11 +109,17 @@ class Word2VecDataset(object):
     map_open = partial(open, encoding="utf-8")
     lines = itertools.chain(*map(map_open, filenames))
     raw_vocab = collections.Counter()
+    if self._special_tokens: 
+      fcomb = open(self._clean_filenames,"w", encoding="utf-8")
     for line in lines:
       if self._special_tokens: 
         line = remove_tokens(line)
         if line.strip() == "": continue
+        else:
+          fcomb.write(line)
       raw_vocab.update(line.strip().split())
+    if self._special_tokens: 
+      fcomb.close()
     raw_vocab = raw_vocab.most_common()
     if self._max_vocab_size > 0:
       raw_vocab = raw_vocab[:self._max_vocab_size]
@@ -256,19 +263,24 @@ class Word2VecDataset(object):
         tf.constant(table_words), default_value=OOV_ID)
     keep_probs = tf.constant(keep_probs)
 
-    if self._special_tokens:
+    if self._special_tokens or self._focus != "":
       if self._focus == "":
-        comb_file = "full_without_special_tokens.txt"
-      else: comb_file = "partial_data_focus_" + self._focus + ".txt"
-      fo = open(comb_file, "w", encoding="utf-8")
-      for fn in filenames:
-        for line in list(open(fn, encoding="utf-8")):
-          line = remove_tokens(line)
-          if self._focus == "": 
+        comb_file = self._clean_filenames
+      else:
+        if self._special_tokens: 
+          comb_file = "clean_filenames_focus_" + self._focus + ".txt"
+          list_lines = list(open(self._clean_filenames, encoding="utf-8"))
+        else:
+          comb_file = "filenames_focus_" + self._focus + ".txt"
+          list_lines = []
+          for fn in filenames:
+            list_lines = list_lines + list(open(fn, encoding="utf-8"))
+        # filter list_focus
+        fo = open(comb_file, "w", encoding="utf-8")
+        for line in list_lines:
+          if self._focus in line:
             fo.write(line)
-          elif self._focus in line:
-            fo.write(line)
-      fo.close()
+        fo.close()
       comb_file = [comb_file]
     else:
       comb_file = filenames

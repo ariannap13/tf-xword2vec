@@ -25,15 +25,15 @@ import data_util as du
 
 flags = tf.app.flags
 
-flags.DEFINE_string('arch', 'skip_gram', 'Architecture (skip_gram or cbow).')
+flags.DEFINE_string('arch', 'cbow', 'Architecture (skip_gram or cbow).')
 flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
     '(negative_sampling or hierarchical_softmax).')
-flags.DEFINE_integer('epochs', 2, 'Num of epochs to iterate training data.')
-flags.DEFINE_integer('batch_size', 3500, 'Batch size.')
+flags.DEFINE_integer('epochs', 3, 'Num of epochs to iterate training data.')
+flags.DEFINE_integer('batch_size', 3000, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
                      'If > 0, the top `max_vocab_size` most frequent words'
                      ' are kept in vocabulary.')
-flags.DEFINE_integer('min_count', 4, 'Words whose counts < `min_count` are not'
+flags.DEFINE_integer('min_count', 6, 'Words whose counts < `min_count` are not'
                                      ' included in the vocabulary.')
 flags.DEFINE_float('sample', 0.01, 'Subsampling rate.')
 flags.DEFINE_integer('window_size', 7, 'Num of words on the left or right side' 
@@ -50,7 +50,7 @@ flags.DEFINE_integer('log_per_steps', 500, 'Every `log_per_steps` steps to '
 flags.DEFINE_list('filenames', None, 'Names of comma-separated input text files.')
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
 flags.DEFINE_integer('seed', 70, 'Seed to fix sequence of random values.')
-flags.DEFINE_string('optim', 'Adam', 'Optimization algorithm '
+flags.DEFINE_string('optim', 'GradDescProx', 'Optimization algorithm '
                             '(GradDescProx, Adam, AdaGradProx, GradDesc).')
 flags.DEFINE_string('decay', 'no', 'Polynomial (poly), cosine (cos) or (no).')
 flags.DEFINE_integer('special_tokens', 1, 'Whether to remove special tokens from'
@@ -114,11 +114,15 @@ def main(_):
                 encoding="utf-8")
     flog.write("Step\tEpoch\tAverageLoss\tLearningRate")
     
+#    if FLAGS.arch == 'skip_gram' and FLAGS.algm == 'negative_sampling':
     # open H5 store file
-    # fname = "InputsLabels_" + FLAGS.arch + "_" + \
-    #     {True: "ns", False: "hs"}[FLAGS.algm=="negative_sampling"] + \
-    #     "_window" + str(FLAGS.window_size) + ".h5"
-    # storeh5 = pd.HDFStore(fname, mode="w", complevel=2, complib='blosc')
+    fname = "InputsLabels_" + FLAGS.arch + "_" + \
+        {True: "ns", False: "hs"}[FLAGS.algm=="negative_sampling"] + \
+        "_window" + str(FLAGS.window_size) + ".h5"
+    storeh5 = pd.HDFStore(fname, mode="w", complevel=2, complib='blosc')
+    df_vocab = pd.DataFrame(list_vocab, columns=["words"])
+    storeh5['df_vocab'] = df_vocab
+    storeh5.close()
 
     step = 0
     sub_step = 0
@@ -130,14 +134,15 @@ def main(_):
       while True:      
         try:
           result_dict = sess.run(to_be_run_dict)
-          # if train_epoch == 1:
-          #   if FLAGS.arch == 'skip_gram':
-          #     a_inputs = result_dict['inputs']
-          #     a_labels = result_dict['labels']
-          #     df_input_label = pd.DataFrame({"input": a_inputs, "label": a_labels})              
-          #     storeh5.append("tb_word", df_input_label, data_columns=["input", "label"],
-          #                    format="t", append=True, 
-          #                    min_itemsize={'input': 50, 'label': 50})                               
+#           if train_epoch == 1:
+# #            if FLAGS.arch == 'skip_gram' and FLAGS.algm == 'negative_sampling':
+#             a_inputs = result_dict['inputs']
+#             a_labels = result_dict['labels']
+#             df_input = pd.DataFrame(a_inputs)
+#             df_label = pd.DataFrame(a_labels)
+#             storeh5.append("df_input", df_input, format="t", append=True) 
+#             #                min_itemsize={'input': 50, 'label': 50})
+#             storeh5.append("df_label", df_label, format="t", append=True) 
               
         except tf.errors.OutOfRangeError:
           break
@@ -189,12 +194,10 @@ def main(_):
             sub_step = 0
             no_log = False
       # while end
-      # if train_epoch == 1:
-      #   if FLAGS.arch == 'skip_gram':
-      #     del df_input_label
-      #   df_vocab = pd.DataFrame(list_vocab, columns=["words"])
-      #   storeh5['df_vocab'] = df_vocab
-      #   storeh5.close()
+#       if train_epoch == 1:
+# #        if FLAGS.arch == 'skip_gram' and FLAGS.algm == 'negative_sampling':
+#         storeh5.close()
+          
     # for end
     if no_log:
       if sub_step > 0:
