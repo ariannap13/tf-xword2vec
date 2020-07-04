@@ -334,7 +334,7 @@ class Word2VecDataset(object):
       labels = tf.squeeze(labels, axis=1)
       
     return {'inputs': inputs, 'labels': labels,
-            'progress': progress, 'epoch': epoch}
+            'progress': progress, 'epoch': epoch} 
 
 
 def get_word_indices(sent, table_words):
