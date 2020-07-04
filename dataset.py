@@ -333,10 +333,8 @@ class Word2VecDataset(object):
     if self._algm == 'negative_sampling':
       labels = tf.squeeze(labels, axis=1)
       
-    to_get_dict = {'inputs': inputs, 'labels': labels,
-                   'progress': progress, 'epoch': epoch} 
-      
-    return to_get_dict
+    return {'inputs': inputs, 'labels': labels,
+            'progress': progress, 'epoch': epoch}
 
 
 def get_word_indices(sent, table_words):
