@@ -335,7 +335,7 @@ class Word2VecDataset(object):
       
     return {'inputs': inputs, 'labels': labels,
             'progress': progress, 'epoch': epoch} 
-
+  
 
 def get_word_indices(sent, table_words):
   """Converts a sentence into a list of word indices.
