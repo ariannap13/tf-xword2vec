@@ -25,7 +25,7 @@ import data_util as du
 
 flags = tf.app.flags
 
-flags.DEFINE_string('arch', 'cbow', 'Architecture (skip_gram or cbow).')
+flags.DEFINE_string('arch', 'skip_gram', 'Architecture (skip_gram or cbow).')
 flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
     '(negative_sampling or hierarchical_softmax).')
 flags.DEFINE_integer('epochs', 3, 'Num of epochs to iterate training data.')
@@ -36,13 +36,13 @@ flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
 flags.DEFINE_integer('min_count', 6, 'Words whose counts < `min_count` are not'
                                      ' included in the vocabulary.')
 flags.DEFINE_float('sample', 0.01, 'Subsampling rate.')
-flags.DEFINE_integer('window_size', 7, 'Num of words on the left or right side' 
+flags.DEFINE_integer('window_size', 6, 'Num of words on the left or right side' 
                                        ' of target word within a window.')
-flags.DEFINE_integer('embed_size', 200, 'Length of word vector.')
+flags.DEFINE_integer('embed_size', 128, 'Length of word vector.')
 flags.DEFINE_integer('negatives', 10, 'Num of negative words to sample.')
 flags.DEFINE_float('power', 0.75, 'Distortion for negative sampling.')
-flags.DEFINE_float('alpha', 0.025, 'Initial learning rate to Gradient Descent.')
-flags.DEFINE_float('min_alpha', 0.002, 'Final learning rate and recommended Adam lr.')
+flags.DEFINE_float('alpha', 0.03, 'Initial learning rate to Gradient Descent.')
+flags.DEFINE_float('min_alpha', 0.003, 'Final learning rate and recommended Adam lr.')
 flags.DEFINE_boolean('add_bias', True, 'Whether to add bias term to dotproduct'
                                        ' between syn0 and syn1 vectors.')
 flags.DEFINE_integer('log_per_steps', 500, 'Every `log_per_steps` steps to '
@@ -50,10 +50,12 @@ flags.DEFINE_integer('log_per_steps', 500, 'Every `log_per_steps` steps to '
 flags.DEFINE_list('filenames', None, 'Names of comma-separated input text files.')
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
 flags.DEFINE_integer('seed', 70, 'Seed to fix sequence of random values.')
-flags.DEFINE_string('optim', 'GradDescProx', 'Optimization algorithm '
+flags.DEFINE_string('optim', 'AdaGradProx', 'Optimization algorithm '
                             '(GradDescProx, Adam, AdaGradProx, GradDesc).')
-flags.DEFINE_string('decay', 'no', 'Polynomial (poly), cosine (cos) or (no).')
+flags.DEFINE_string('decay', 'cos', 'Polynomial (poly), cosine (cos) or (no).')
 flags.DEFINE_integer('special_tokens', 1, 'Whether to remove special tokens from'
+                                       ' data files.')
+flags.DEFINE_string('focus', "", 'Whether to remove special tokens from'
                                        ' data files.')
 
 FLAGS = flags.FLAGS
@@ -67,8 +69,10 @@ def main(_):
                             min_count=FLAGS.min_count,
                             sample=FLAGS.sample,
                             window_size=FLAGS.window_size,
-                            special_tokens=FLAGS.special_tokens)
-    
+                            special_tokens=FLAGS.special_tokens,
+                            focus=FLAGS.focus)
+  
+  dataset.focus = ""  
   dataset.build_vocab(FLAGS.filenames)
 
   word2vec = Word2VecModel(arch=FLAGS.arch,
@@ -82,10 +86,11 @@ def main(_):
                            add_bias=FLAGS.add_bias,
                            random_seed=FLAGS.seed,
                            optim=FLAGS.optim,
-                           decay=FLAGS.decay)
-
-  dataset.focus = ""
-  to_be_run_dict = word2vec.train(dataset, FLAGS.filenames, 1)
+                           decay=FLAGS.decay,
+                           epochs = FLAGS.epochs)
+  
+  word2vec.epoch = 1
+  to_be_run_dict = word2vec.train(dataset, FLAGS.filenames)
   
   datatools = du.DataFileTools(out_path=FLAGS.out_dir)
 
@@ -131,6 +136,7 @@ def main(_):
     
     for train_epoch in range(1, 1 + FLAGS.epochs):
       sess.run(dataset.iterator_initializer)
+      word2vec.epoch = train_epoch
       while True:      
         try:
           result_dict = sess.run(to_be_run_dict)
@@ -150,11 +156,10 @@ def main(_):
         no_log = True
         step += 1
         sub_step += 1
-        op_lr = sess.run(word2vec.lr)
+        op_lr = result_dict['learning_rate']
         average_loss += result_dict['loss'].mean()
-        # train_epoch = result_dict['op_epoch']
         train_progress = result_dict['progress_rate']
-        train_progress = (train_epoch -1 + train_progress) / FLAGS.epochs
+        # train_progress = (train_epoch -1 + train_progress) / FLAGS.epochs
         if step == 1:
           # first one
           syn0_partial = sess.run(word2vec.syn0)
