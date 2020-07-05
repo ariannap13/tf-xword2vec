@@ -36,7 +36,8 @@ class Word2VecDataset(object):
                min_count=2,
                sample=1e-3,
                window_size=5,
-               special_tokens=0):
+               special_tokens=0,
+               focus=""):
     """Constructor.
     Args:
       arch: string scalar, architecture ('skip_gram' or 'cbow').
@@ -71,7 +72,7 @@ class Word2VecDataset(object):
     self._corpus_size = None
     self._max_depth = None
     
-    self._focus = ""
+    self._focus = focus
     self._clean_filenames = "clean_filenames.txt"
     
   @property
@@ -94,6 +95,7 @@ class Word2VecDataset(object):
   def focus(self):
     return self._focus
   
+  # to change focus value
   @focus.setter
   def focus(self, v):
     self._focus = str(v)
@@ -226,11 +228,13 @@ class Word2VecDataset(object):
       labels = tensor[:, 2 * self._window_size + 1:]
     return inputs, labels
 
-  def get_tensor_dict(self, filenames, epochs=1):
+  def get_tensor_dict(self, filenames):
     """Generates tensor dict mapping from tensor names to tensors.
     Args:
       filenames: list of strings, holding names of text files.
-      epochs: int scalar, num times the dataset is iterated.
+      epochs: int scalar, num times the dataset is iterated. 
+              Removed and mantained only in word2vec and training to reduce
+                memory usage.
       
     Returns:
       tensor_dict: a dict mapping from tensor names to tensors with shape being:
@@ -242,8 +246,8 @@ class Word2VecDataset(object):
           inputs: [N],                    labels: [N, 2*max_depth+1]
         when arch=='cbow', algm=='hierarchical_softmax'
           inputs: [N, 2*window_size+1],   labels: [N, 2*max_depth+1]
-        progress: [N], the percentage of sentences covered so far. Used to 
-          compute learning rate.
+        progress: [N], the percentage of sentences covered so far to one epoch.
+                  Used to compute learning rate.
     """
     table_words = self._table_words
     unigram_counts = self._unigram_counts
@@ -288,44 +292,40 @@ class Word2VecDataset(object):
     num_sents = sum([len(list(open(fn, encoding="utf-8"))) for fn in comb_file])
       
     assert num_sents > 1
-    num_sents = epochs * num_sents
+    # epoch removed to reduce used memory.
+    # num_sents = epochs * num_sents
     
-    # include epoch number, like progress
-    a_zip = tf.data.TextLineDataset(comb_file).repeat(epochs)
+    a_zip = tf.data.TextLineDataset(comb_file)
     b_zip = tf.range(1, 1 + num_sents) / num_sents
-    c_zip = tf.repeat(tf.range(1, 1+epochs), int(num_sents / epochs))
     
     dataset = tf.data.Dataset.zip((a_zip,
-                                   tf.data.Dataset.from_tensor_slices(b_zip),
-                                   tf.data.Dataset.from_tensor_slices(c_zip)))
+                                   tf.data.Dataset.from_tensor_slices(b_zip)))
         
-    dataset = dataset.map(lambda sent, progress, epoch: 
-        (get_word_indices(sent, table_words), progress, epoch))
-    dataset = dataset.map(lambda indices, progress, epoch: 
-        (subsample(indices, keep_probs), progress, epoch))
+    dataset = dataset.map(lambda sent, progress: 
+        (get_word_indices(sent, table_words), progress))
+    dataset = dataset.map(lambda indices, progress: 
+        (subsample(indices, keep_probs), progress))
       
-    dataset = dataset.filter(lambda indices, progress, epoch: 
+    dataset = dataset.filter(lambda indices, progress: 
         tf.greater(tf.size(indices), 1))
 
-    dataset = dataset.map(lambda indices, progress, epoch: (
+    dataset = dataset.map(lambda indices, progress: (
       generate_instances(indices, self._arch, self._window_size, codes_points),
-                         progress, epoch))
+                         progress))
     
-    dataset = dataset.map(lambda instances, progress, epoch: (
-        instances, tf.fill(tf.shape(instances)[:1], progress),
-                   tf.fill(tf.shape(instances)[:1], epoch)))
+    dataset = dataset.map(lambda instances, progress: (
+        instances, tf.fill(tf.shape(instances)[:1], progress)))
 
-    dataset = dataset.flat_map(lambda instances, progress, epoch: 
-        tf.data.Dataset.from_tensor_slices((instances, progress, epoch)))
+    dataset = dataset.flat_map(lambda instances, progress: 
+        tf.data.Dataset.from_tensor_slices((instances, progress)))
       
     dataset = dataset.batch(self._batch_size, drop_remainder=True)
     
     iterator = tf.compat.v1.data.make_initializable_iterator(dataset)
     self._iterator_initializer = iterator.initializer
     self._iterator_next = iterator.get_next()
-    tensor, progress, epoch = self._iterator_next
+    tensor, progress = self._iterator_next
     progress.set_shape([self._batch_size])
-    epoch.set_shape([self._batch_size])
 
     inputs, labels = self._prepare_inputs_labels(tensor)
     if self._arch == 'skip_gram':
@@ -333,8 +333,7 @@ class Word2VecDataset(object):
     if self._algm == 'negative_sampling':
       labels = tf.squeeze(labels, axis=1)
       
-    return {'inputs': inputs, 'labels': labels,
-            'progress': progress, 'epoch': epoch} 
+    return {'inputs': inputs, 'labels': labels, 'progress': progress} 
   
 
 def get_word_indices(sent, table_words):

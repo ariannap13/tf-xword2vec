@@ -11,7 +11,8 @@ class Word2VecModel(object):
   """
 
   def __init__(self, arch, algm, embed_size, batch_size, negatives, power,
-               alpha, min_alpha, add_bias, random_seed, optim, decay):
+               alpha, min_alpha, add_bias, random_seed, optim, decay,
+               epochs=1):
     """Constructor.
 
     Args:
@@ -42,6 +43,9 @@ class Word2VecModel(object):
     self._random_seed = random_seed
     self._optim = optim
     self._decay = decay
+    self._epochs = epochs
+    
+    self._epoch = 1     # default value
     self._inputs = None
     self._labels = None
     
@@ -60,6 +64,15 @@ class Word2VecModel(object):
   @property
   def syn0(self):
     return self._syn0
+
+  @property
+  def epoch(self):
+    return self._epoch
+  
+  @epoch.setter
+  def epoch(self, v):
+    self._epoch = int(v)
+
 
   def _build_loss(self, inputs, labels, unigram_counts, scope=None):
     """Builds the graph that leads from data tensors (`inputs`, `labels`)
@@ -88,7 +101,7 @@ class Word2VecModel(object):
             inputs, labels, syn0, syn1, biases)
       return loss
 
-  def train(self, dataset, filenames, epochs, to_train=True):
+  def train(self, dataset, filenames):
     """Adds training related ops to the graph.
 
     Args:
@@ -106,17 +119,20 @@ class Word2VecModel(object):
     """
     global_step = tf.compat.v1.train.get_or_create_global_step()
     
-    tensor_dict = dataset.get_tensor_dict(filenames, epochs)
+    # fixed to 1 to controle it in run_training the actual number os epochs
+    #   is self._epochs, used to calculate decay and progress
+    tensor_dict = dataset.get_tensor_dict(filenames)
     inputs, labels = tensor_dict['inputs'], tensor_dict['labels']
-    op_epoch = tensor_dict['epoch'][0]
-    op_epoch = tf.identity(op_epoch, name='op_epoch')
     
     # instead of global step, progress rate is used to calculate learning rate
-    progress_rate = tensor_dict['progress'][0]
+    # progress_rate based on 1 epoch
+    progress_epoch = tensor_dict['progress'][0]
+    progress_rate = tf.maximum((self._epoch -1 + progress_epoch) / self._epochs, 1)
     progress_rate = tf.identity(progress_rate, name='progress_rate')
     
     # learning rate
-    if self._optim in ('Adam', 'GradDescProx', 'AdaGradProx'):
+    if self._optim == 'Adam':
+      # fixed - already the minimum
       learning_rate = self._lr
     elif self._decay == 'poly':
       learning_rate = tf.maximum(
@@ -129,10 +145,18 @@ class Word2VecModel(object):
     elif self._decay == 'lin':
       learning_rate = tf.maximum(self._alpha * (1 - progress_rate),
                                  self._min_alpha)
+    elif self._decay == 'step':
+      if self._epoch == 1: 
+        learning_rate = self._alpha
+      elif self._epoch == self._epochs:
+        learning_rate = self._min_alpha
+      else:
+        learning_rate = self._epoch * (
+                        self._alpha - self._min_alpha)/ self._epochs 
     else:
       learning_rate = self._lr
       
-    self._lr = tf.to_float(learning_rate)
+    learning_rate = tf.compat.v1.to_float(learning_rate, name='learning_rate')
 
     loss = self._build_loss(inputs, labels, dataset.unigram_counts)
     
@@ -159,8 +183,7 @@ class Word2VecModel(object):
     to_be_run_dict = {'grad_update_op': grad_update_op,  
                       'loss': loss,
                       'inputs': inputs, 'labels': labels,
-                      'progress_rate': progress_rate,
-                      'op_epoch': op_epoch}
+                      'progress_rate': progress_rate}
     return to_be_run_dict
 
   def _create_embeddings(self, vocab_size, scope=None):
