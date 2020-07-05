@@ -58,10 +58,6 @@ class Word2VecModel(object):
       self._lr = alpha
 
   @property
-  def lr(self):
-    return self._lr
-
-  @property
   def syn0(self):
     return self._syn0
 
@@ -135,16 +131,12 @@ class Word2VecModel(object):
       # fixed - already the minimum
       learning_rate = self._lr
     elif self._decay == 'poly':
-      learning_rate = tf.maximum(
-                      (self._alpha - self._min_alpha) * (1 - progress_rate) + 
-                      (self._min_alpha), self._min_alpha)
+      learning_rate = (self._alpha - self._min_alpha) * (1 - progress_rate) + \
+                       self._min_alpha
     elif self._decay == 'cos':
-      learning_rate = tf.maximum(self._alpha * 0.5 * 
-                                 (1 + tf.cos(np.pi * progress_rate)),
-                                 self._min_alpha)
+      learning_rate = self._alpha * 0.5 * (1 + tf.cos(np.pi * progress_rate))
     elif self._decay == 'lin':
-      learning_rate = tf.maximum(self._alpha * (1 - progress_rate),
-                                 self._min_alpha)
+      learning_rate = self._alpha * (1 - progress_rate)
     elif self._decay == 'step':
       if self._epoch == 1: 
         learning_rate = self._alpha
@@ -155,8 +147,12 @@ class Word2VecModel(object):
                         self._alpha - self._min_alpha)/ self._epochs 
     else:
       learning_rate = self._lr
-      
+
+    if learning_rate < self._min_alpha:
+      learning_rate = self._min_alpha
+
     learning_rate = tf.compat.v1.to_float(learning_rate, name='learning_rate')
+    self._lr = learning_rate
 
     loss = self._build_loss(inputs, labels, dataset.unigram_counts)
     
