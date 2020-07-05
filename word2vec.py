@@ -122,9 +122,9 @@ class Word2VecModel(object):
     
     # instead of global step, progress rate is used to calculate learning rate
     # progress_rate based on 1 epoch
-    progress_epoch = tensor_dict['progress'][0]
-    progress_rate = tf.maximum((self._epoch -1 + progress_epoch) / self._epochs, 1)
-    progress_rate = tf.identity(progress_rate, name='progress_rate')
+    progress_epoch = tf.compat.v1.to_float(tensor_dict['progress'][0])
+    progress_rate = (self._epoch -1 + progress_epoch) / self._epochs
+    progress_rate = tf.minimum(progress_rate, tf.constant(1.)) 
     
     # learning rate
     if self._optim == 'Adam':
@@ -148,10 +148,9 @@ class Word2VecModel(object):
     else:
       learning_rate = self._lr
 
-    if learning_rate < self._min_alpha:
-      learning_rate = self._min_alpha
+    learning_rate = tf.maximum(learning_rate, self._min_alpha)
 
-    learning_rate = tf.compat.v1.to_float(learning_rate, name='learning_rate')
+    learning_rate = tf.compat.v1.to_float(learning_rate)
     self._lr = learning_rate
 
     loss = self._build_loss(inputs, labels, dataset.unigram_counts)
@@ -179,7 +178,8 @@ class Word2VecModel(object):
     to_be_run_dict = {'grad_update_op': grad_update_op,  
                       'loss': loss,
                       'inputs': inputs, 'labels': labels,
-                      'progress_rate': progress_rate}
+                      'progress_rate': progress_rate,
+                      'learning_rate': learning_rate}
     return to_be_run_dict
 
   def _create_embeddings(self, vocab_size, scope=None):
