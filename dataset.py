@@ -71,6 +71,7 @@ class Word2VecDataset(object):
     self._keep_probs = None
     self._corpus_size = None
     self._max_depth = None
+    self._epoch = None
     
     self._focus = focus
     self._clean_filenames = "clean_filenames.txt"
@@ -228,13 +229,11 @@ class Word2VecDataset(object):
       labels = tensor[:, 2 * self._window_size + 1:]
     return inputs, labels
 
-  def get_tensor_dict(self, filenames):
+  def get_tensor_dict(self, filenames, epochs=1):
     """Generates tensor dict mapping from tensor names to tensors.
     Args:
       filenames: list of strings, holding names of text files.
       epochs: int scalar, num times the dataset is iterated. 
-              Removed and mantained only in word2vec and training to reduce
-                memory usage.
       
     Returns:
       tensor_dict: a dict mapping from tensor names to tensors with shape being:
@@ -290,50 +289,56 @@ class Word2VecDataset(object):
       comb_file = filenames
       
     num_sents = sum([len(list(open(fn, encoding="utf-8"))) for fn in comb_file])
-      
-    assert num_sents > 1
-    # epoch removed to reduce used memory.
-    # num_sents = epochs * num_sents
     
-    a_zip = tf.data.TextLineDataset(comb_file)
+    assert num_sents > 1
+    # tried to remove epoch but interaction failed.
+    num_sents = epochs * num_sents
+    
+    a_zip = tf.data.TextLineDataset(comb_file).repeat(epochs)
     b_zip = tf.range(1, 1 + num_sents) / num_sents
+    c_zip = tf.repeat(tf.range(1, 1 + epochs), int(num_sents / epochs))
     
     dataset = tf.data.Dataset.zip((a_zip,
-                                   tf.data.Dataset.from_tensor_slices(b_zip)))
+                                   tf.data.Dataset.from_tensor_slices(b_zip),
+                                   tf.data.Dataset.from_tensor_slices(c_zip)))
         
-    dataset = dataset.map(lambda sent, progress: 
-        (get_word_indices(sent, table_words), progress))
-    dataset = dataset.map(lambda indices, progress: 
-        (subsample(indices, keep_probs), progress))
+    dataset = dataset.map(lambda sent, progress, epoch: 
+        (get_word_indices(sent, table_words), progress, epoch))
+    dataset = dataset.map(lambda indices, progress, epoch: 
+        (subsample(indices, keep_probs), progress, epoch))
       
-    dataset = dataset.filter(lambda indices, progress: 
+    dataset = dataset.filter(lambda indices, progress, epoch: 
         tf.greater(tf.size(indices), 1))
 
-    dataset = dataset.map(lambda indices, progress: (
+    dataset = dataset.map(lambda indices, progress, epoch: (
       generate_instances(indices, self._arch, self._window_size, codes_points),
-                         progress))
+                         progress, epoch))
     
-    dataset = dataset.map(lambda instances, progress: (
-        instances, tf.fill(tf.shape(instances)[:1], progress)))
+    dataset = dataset.map(lambda instances, progress, epoch: (
+        instances, tf.fill(tf.shape(instances)[:1], progress),
+                   tf.fill(tf.shape(instances)[:1], epoch) ))
 
-    dataset = dataset.flat_map(lambda instances, progress: 
-        tf.data.Dataset.from_tensor_slices((instances, progress)))
+    dataset = dataset.flat_map(lambda instances, progress, epoch: 
+        tf.data.Dataset.from_tensor_slices((instances, progress, epoch)))
       
     dataset = dataset.batch(self._batch_size, drop_remainder=True)
     
     iterator = tf.compat.v1.data.make_initializable_iterator(dataset)
+    
     self._iterator_initializer = iterator.initializer
     self._iterator_next = iterator.get_next()
-    tensor, progress = self._iterator_next
+    tensor, progress, epoch = self._iterator_next
     progress.set_shape([self._batch_size])
+    epoch.set_shape([self._batch_size])
 
     inputs, labels = self._prepare_inputs_labels(tensor)
     if self._arch == 'skip_gram':
       inputs = tf.squeeze(inputs, axis=1)
     if self._algm == 'negative_sampling':
       labels = tf.squeeze(labels, axis=1)
-      
-    return {'inputs': inputs, 'labels': labels, 'progress': progress} 
+            
+    return {'inputs': inputs, 'labels': labels,
+            'progress': progress, 'epoch': epoch} 
   
 
 def get_word_indices(sent, table_words):

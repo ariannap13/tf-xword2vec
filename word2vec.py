@@ -11,8 +11,7 @@ class Word2VecModel(object):
   """
 
   def __init__(self, arch, algm, embed_size, batch_size, negatives, power,
-               alpha, min_alpha, add_bias, random_seed, optim, decay,
-               epochs=1):
+               alpha, min_alpha, add_bias, random_seed, optim, decay):
     """Constructor.
 
     Args:
@@ -29,7 +28,8 @@ class Word2VecModel(object):
         between syn0 and syn1 vectors.
       random_seed: int scalar, random_seed if equal to zero.
       optim: string, ('GradDesc', 'AdaGradProx', 'GradDescProx', 'Adam').
-      decay: string, polynomial, cosine decay, linear ('poly', 'cos', 'lin', 'no')
+      decay: string, polynomial, cosine decay, linear 
+      ('poly', 'cos', 'lin', 'step', 'no')
     """
     self._arch = arch
     self._algm = algm
@@ -43,31 +43,15 @@ class Word2VecModel(object):
     self._random_seed = random_seed
     self._optim = optim
     self._decay = decay
-    self._epochs = epochs
     
-    self._epoch = 1     # default value
     self._inputs = None
     self._labels = None
     
     self._syn0 = None
     
-    if optim == 'Adam':
-      # 0.003 is recommended
-      self._lr = self._min_alpha
-    else:
-      self._lr = alpha
-
   @property
   def syn0(self):
     return self._syn0
-
-  @property
-  def epoch(self):
-    return self._epoch
-  
-  @epoch.setter
-  def epoch(self, v):
-    self._epoch = int(v)
 
 
   def _build_loss(self, inputs, labels, unigram_counts, scope=None):
@@ -97,12 +81,13 @@ class Word2VecModel(object):
             inputs, labels, syn0, syn1, biases)
       return loss
 
-  def train(self, dataset, filenames):
+  def train(self, dataset, filenames, epochs):
     """Adds training related ops to the graph.
 
     Args:
       dataset: a `Word2VecDataset` instance.
       filenames: a list of strings, holding names of text files.
+      epoch: epoch number.
 
     Returns: 
       to_be_run_dict: dict mapping from names to tensors/operations, holding
@@ -113,73 +98,65 @@ class Word2VecModel(object):
           'progress_rate': float with progress rate
           }
     """
+    # instead of global step, progress rate is used to calculate learning rate
+    # progress_rate based on 1 epoch
     global_step = tf.compat.v1.train.get_or_create_global_step()
     
     # fixed to 1 to controle it in run_training the actual number os epochs
     #   is self._epochs, used to calculate decay and progress
-    tensor_dict = dataset.get_tensor_dict(filenames)
-    inputs, labels = tensor_dict['inputs'], tensor_dict['labels']
+    tensor_dict = dataset.get_tensor_dict(filenames, epochs=1) 
+    inputs = tensor_dict['inputs']
+    labels = tensor_dict['labels']
     
-    # instead of global step, progress rate is used to calculate learning rate
-    # progress_rate based on 1 epoch
-    progress_epoch = tf.compat.v1.to_float(tensor_dict['progress'][0])
-    progress_rate = (self._epoch -1 + progress_epoch) / self._epochs
-    progress_rate = tf.minimum(progress_rate, tf.constant(1.)) 
+    t_epoch = tf.reduce_mean(tensor_dict['epoch'])
+    t_epoch = tf.cast(tf.round(t_epoch), dtype=tf.float64)
+    
+    progress_rate = tf.reduce_max(tensor_dict['progress'])
+    progress_rate = tf.minimum(progress_rate, 1.)
+ 
+    # variables and constants
+    t_alpha = tf.constant(self._alpha, dtype=tf.float64)
+    t_min_alpha = tf.constant(self._min_alpha, dtype=tf.float64) 
     
     # learning rate
     if self._optim == 'Adam':
       # fixed - already the minimum
-      learning_rate = self._lr
+      learning_rate = t_min_alpha
     elif self._decay == 'poly':
-      learning_rate = (self._alpha - self._min_alpha) * (1 - progress_rate) + \
-                       self._min_alpha
+      learning_rate = (t_alpha - t_min_alpha) * (1. - progress_rate) + t_min_alpha
     elif self._decay == 'cos':
-      learning_rate = self._alpha * 0.5 * (1 + tf.cos(np.pi * progress_rate))
+      learning_rate = t_alpha * 0.5 * (1. + tf.cos(np.pi * progress_rate))
     elif self._decay == 'lin':
-      learning_rate = self._alpha * (1 - progress_rate)
-    elif self._decay == 'step':
-      if self._epoch == 1: 
-        learning_rate = self._alpha
-      elif self._epoch == self._epochs:
-        learning_rate = self._min_alpha
-      else:
-        learning_rate = self._epoch * (
-                        self._alpha - self._min_alpha)/ self._epochs 
+      learning_rate = t_alpha * (1. - progress_rate)
+    elif self._decay == 'step': 
+      learning_rate = t_alpha * (0.5 ** (t_epoch - 1.)) 
     else:
-      learning_rate = self._lr
+      learning_rate = t_alpha
 
-    learning_rate = tf.maximum(learning_rate, self._min_alpha)
-
-    learning_rate = tf.compat.v1.to_float(learning_rate)
-    self._lr = learning_rate
+    learning_rate = tf.maximum(learning_rate, t_min_alpha, name='learning_rate')
+    learning_rate = tf.cast(learning_rate, dtype=tf.float32)
 
     loss = self._build_loss(inputs, labels, dataset.unigram_counts)
     
     # optimizer
     if self._optim == 'Adam':
-      optimizer = tf.compat.v1.train.AdamOptimizer(self._lr)
+      optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate)
     elif self._optim == 'AdaGradProx':
       optimizer = tf.compat.v1.train.ProximalAdagradOptimizer(
-                            self._lr,
-                            l1_regularization_strength=0.00001,
-                            l2_regularization_strength=0.00001)
+                            learning_rate)
     elif self._optim == 'GradDescProx':
       optimizer = tf.compat.v1.train.ProximalGradientDescentOptimizer(
-                            self._lr,
-                            l1_regularization_strength=0.0,
-                            l2_regularization_strength=0.0)
+                            learning_rate)
     else:
-      optimizer = tf.compat.v1.train.GradientDescentOptimizer(self._lr)
+      optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
       
-    grad_update_op = optimizer.minimize(loss,
-                                        global_step=global_step,
-                                        name='grad_update_op')
+    grad_update_op = optimizer.minimize(loss, global_step=global_step)
     
-    to_be_run_dict = {'grad_update_op': grad_update_op,  
+    to_be_run_dict = {'grad_update_op': grad_update_op,
                       'loss': loss,
-                      'inputs': inputs, 'labels': labels,
                       'progress_rate': progress_rate,
-                      'learning_rate': learning_rate}
+                      'learning_rate': learning_rate,
+                      'epoch': t_epoch}
     return to_be_run_dict
 
   def _create_embeddings(self, vocab_size, scope=None):
