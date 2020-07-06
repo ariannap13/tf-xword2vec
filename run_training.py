@@ -225,6 +225,6 @@ def main(_):
 
 if __name__ == '__main__':
   
-  tf.flags.mark_flag_as_required('filenames')
+  # tf.flags.mark_flag_as_required('filenames')
 
   tf.compat.v1.app.run()
