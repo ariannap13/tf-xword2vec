@@ -50,9 +50,9 @@ flags.DEFINE_integer('log_per_steps', 500, 'Every `log_per_steps` steps to '
 flags.DEFINE_list('filenames', 'data/tok_2012.pt', 'Names of comma-separated input text files.')
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
 flags.DEFINE_integer('seed', 70, 'Seed to fix sequence of random values.')
-flags.DEFINE_string('optim', 'GradDesc', 'Optimization algorithm '
+flags.DEFINE_string('optim', 'GradDescProx', 'Optimization algorithm '
                             '(GradDescProx, Adam, AdaGradProx, GradDesc).')
-flags.DEFINE_string('decay', 'cos', 'Polynomial (poly), cosine (cos), step or (no).')
+flags.DEFINE_string('decay', 'no', 'Polynomial (poly), cosine (cos), step or (no).')
 flags.DEFINE_integer('special_tokens', 1, 'Whether to remove special tokens from'
                                        ' data files.')
 flags.DEFINE_string('focus', "", 'Whether to remove special tokens from'
