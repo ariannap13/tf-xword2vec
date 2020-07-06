@@ -296,7 +296,7 @@ class Word2VecDataset(object):
     
     a_zip = tf.data.TextLineDataset(comb_file).repeat(epochs)
     b_zip = tf.range(1, 1 + tot_sents) / tot_sents
-    c_zip = tf.repeat(tf.range(1, 1 + epochs), num_sents))
+    c_zip = tf.repeat(tf.range(1, 1 + epochs), num_sents)
     
     dataset = tf.data.Dataset.zip((a_zip,
                                    tf.data.Dataset.from_tensor_slices(b_zip),
