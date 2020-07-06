@@ -47,7 +47,7 @@ flags.DEFINE_boolean('add_bias', True, 'Whether to add bias term to dotproduct'
                                        ' between syn0 and syn1 vectors.')
 flags.DEFINE_integer('log_per_steps', 500, 'Every `log_per_steps` steps to '
                                             ' output logs.')
-flags.DEFINE_list('filenames', None, 'Names of comma-separated input text files.')
+flags.DEFINE_list('filenames', 'data/tok_2012.pt', 'Names of comma-separated input text files.')
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
 flags.DEFINE_integer('seed', 70, 'Seed to fix sequence of random values.')
 flags.DEFINE_string('optim', 'GradDesc', 'Optimization algorithm '
