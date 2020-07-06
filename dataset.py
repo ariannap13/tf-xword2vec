@@ -71,7 +71,6 @@ class Word2VecDataset(object):
     self._keep_probs = None
     self._corpus_size = None
     self._max_depth = None
-    self._epoch = None
     
     self._focus = focus
     self._clean_filenames = "clean_filenames.txt"
@@ -229,7 +228,7 @@ class Word2VecDataset(object):
       labels = tensor[:, 2 * self._window_size + 1:]
     return inputs, labels
 
-  def get_tensor_dict(self, filenames, epochs=1):
+  def get_tensor_dict(self, filenames, epochs):
     """Generates tensor dict mapping from tensor names to tensors.
     Args:
       filenames: list of strings, holding names of text files.
@@ -247,6 +246,7 @@ class Word2VecDataset(object):
           inputs: [N, 2*window_size+1],   labels: [N, 2*max_depth+1]
         progress: [N], the percentage of sentences covered so far to one epoch.
                   Used to compute learning rate.
+        epoch: [N], the epoch associated to the sentence.
     """
     table_words = self._table_words
     unigram_counts = self._unigram_counts
@@ -292,11 +292,11 @@ class Word2VecDataset(object):
     
     assert num_sents > 1
     # tried to remove epoch but interaction failed.
-    num_sents = epochs * num_sents
+    tot_sents = epochs * num_sents
     
     a_zip = tf.data.TextLineDataset(comb_file).repeat(epochs)
-    b_zip = tf.range(1, 1 + num_sents) / num_sents
-    c_zip = tf.repeat(tf.range(1, 1 + epochs), int(num_sents / epochs))
+    b_zip = tf.range(1, 1 + tot_sents) / tot_sents
+    c_zip = tf.repeat(tf.range(1, 1 + epochs), num_sents))
     
     dataset = tf.data.Dataset.zip((a_zip,
                                    tf.data.Dataset.from_tensor_slices(b_zip),
@@ -304,6 +304,7 @@ class Word2VecDataset(object):
         
     dataset = dataset.map(lambda sent, progress, epoch: 
         (get_word_indices(sent, table_words), progress, epoch))
+      
     dataset = dataset.map(lambda indices, progress, epoch: 
         (subsample(indices, keep_probs), progress, epoch))
       
@@ -316,7 +317,7 @@ class Word2VecDataset(object):
     
     dataset = dataset.map(lambda instances, progress, epoch: (
         instances, tf.fill(tf.shape(instances)[:1], progress),
-                   tf.fill(tf.shape(instances)[:1], epoch) ))
+                   tf.fill(tf.shape(instances)[:1], epoch)))
 
     dataset = dataset.flat_map(lambda instances, progress, epoch: 
         tf.data.Dataset.from_tensor_slices((instances, progress, epoch)))

@@ -104,10 +104,9 @@ class Word2VecModel(object):
     
     # fixed to 1 to controle it in run_training the actual number os epochs
     #   is self._epochs, used to calculate decay and progress
-    tensor_dict = dataset.get_tensor_dict(filenames, epochs=1) 
+    tensor_dict = dataset.get_tensor_dict(filenames, epochs) 
     inputs = tensor_dict['inputs']
     labels = tensor_dict['labels']
-    
     t_epoch = tf.reduce_mean(tensor_dict['epoch'])
     t_epoch = tf.cast(tf.round(t_epoch), dtype=tf.float64)
     
