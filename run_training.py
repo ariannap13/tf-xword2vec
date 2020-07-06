@@ -33,7 +33,7 @@ flags.DEFINE_integer('batch_size', 3000, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
                      'If > 0, the top `max_vocab_size` most frequent words'
                      ' are kept in vocabulary.')
-flags.DEFINE_integer('min_count', 5, 'Words whose counts < `min_count` are not'
+flags.DEFINE_integer('min_count', 6, 'Words whose counts < `min_count` are not'
                                      ' included in the vocabulary.')
 flags.DEFINE_float('sample', 0.01, 'Subsampling rate.')
 flags.DEFINE_integer('window_size', 6, 'Num of words on the left or right side' 
