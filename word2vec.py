@@ -273,7 +273,7 @@ class Word2VecModel(object):
 
       # float type dependency!
       loss.append(tf.nn.sigmoid_cross_entropy_with_logits(
-           labels=tf.cast(codes, dtype=tf.float64), logits=logits)) # to_float
+           labels=tf.cast(codes, dtype=tf.float32), logits=logits)) # to_float
     loss = tf.concat(loss, axis=0)
     return loss
 
