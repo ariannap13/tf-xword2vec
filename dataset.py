@@ -17,8 +17,8 @@ def remove_tokens(line):
   spacer = u"\u2581"              # "▁"
   regex = protect_ini + "[^" + protect_end + "]*" + protect_end
   line = re.sub(regex, "", line)
-  line = line.replace('"', "")
-  line = line.replace(connector, "")
+  line = line.replace('" ', "")
+  line = line.replace(" " + connector, "")
   line = line.replace(spacer, "")
   if not set(string.ascii_lowercase).intersection(line.lower()):
     line = ""
