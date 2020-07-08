@@ -41,7 +41,7 @@ flags.DEFINE_integer('window_size', 5, 'Num of words on the left or right side'
 flags.DEFINE_integer('embed_size', 200, 'Length of word vector.')
 flags.DEFINE_integer('negatives', 20, 'Num of negative words to sample.')
 flags.DEFINE_float('power', 0.75, 'Distortion for negative sampling.')
-flags.DEFINE_float('alpha', 0.020, 'Initial learning rate.')
+flags.DEFINE_float('alpha', 0.025, 'Initial learning rate.')
 flags.DEFINE_float('min_alpha', 0.003, 'Final learning rate and recommended Adam lr.')
 flags.DEFINE_boolean('add_bias', True, 'Whether to add bias term to dotproduct'
                                        ' between syn0 and syn1 vectors.')
@@ -50,9 +50,9 @@ flags.DEFINE_integer('log_per_steps', 500, 'Every `log_per_steps` steps to '
 flags.DEFINE_list('filenames', 'data/tok_2012.pt', 'Names of comma-separated input text files.')
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
 flags.DEFINE_integer('seed', 77, 'Seed to fix sequence of random values.')
-flags.DEFINE_string('optim', 'AdaGradProx', 'Optimization algorithm '
+flags.DEFINE_string('optim', 'GradDescProx', 'Optimization algorithm '
                             '(GradDescProx, Adam, AdaGradProx, GradDesc).')
-flags.DEFINE_string('decay', 'cos', 'Polynomial (poly), cosine (cos), step or (no).')
+flags.DEFINE_string('decay', 'no', 'Polynomial (poly), cosine (cos), step or (no).')
 flags.DEFINE_integer('special_tokens', 1, 'Whether to remove special tokens from'
                                        ' data files.')
 flags.DEFINE_string('focus', "", 'Whether to remove special tokens from'
