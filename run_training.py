@@ -25,21 +25,21 @@ import data_util as du
 
 flags = tf.app.flags
 
-flags.DEFINE_string('arch', 'skip_gram', 'Architecture (skip_gram or cbow).')
-flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
+flags.DEFINE_string('arch', 'cbow', 'Architecture (skip_gram or cbow).')
+flags.DEFINE_string('algm', 'hierarchical_softmax', 'Training algorithm '
     '(negative_sampling or hierarchical_softmax).')
-flags.DEFINE_integer('epochs', 3, 'Num of epochs to iterate training data.')
-flags.DEFINE_integer('batch_size', 3000, 'Batch size.')
+flags.DEFINE_integer('epochs', 20, 'Num of epochs to iterate training data.')
+flags.DEFINE_integer('batch_size', 500, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
                      'If > 0, the top `max_vocab_size` most frequent words'
                      ' are kept in vocabulary.')
-flags.DEFINE_integer('min_count', 6, 'Words whose counts < `min_count` are not'
+flags.DEFINE_integer('min_count', 30, 'Words whose counts < `min_count` are not'
                                      ' included in the vocabulary.')
 flags.DEFINE_float('sample', 0.01, 'Subsampling rate.')
-flags.DEFINE_integer('window_size', 6, 'Num of words on the left or right side' 
+flags.DEFINE_integer('window_size', 5, 'Num of words on the left or right side' 
                                        ' of target word within a window.')
 flags.DEFINE_integer('embed_size', 200, 'Length of word vector.')
-flags.DEFINE_integer('negatives', 10, 'Num of negative words to sample.')
+flags.DEFINE_integer('negatives', 20, 'Num of negative words to sample.')
 flags.DEFINE_float('power', 0.75, 'Distortion for negative sampling.')
 flags.DEFINE_float('alpha', 0.020, 'Initial learning rate.')
 flags.DEFINE_float('min_alpha', 0.003, 'Final learning rate and recommended Adam lr.')
@@ -49,10 +49,10 @@ flags.DEFINE_integer('log_per_steps', 500, 'Every `log_per_steps` steps to '
                                             ' output logs.')
 flags.DEFINE_list('filenames', 'data/tok_2012.pt', 'Names of comma-separated input text files.')
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
-flags.DEFINE_integer('seed', 70, 'Seed to fix sequence of random values.')
-flags.DEFINE_string('optim', 'GradDescProx', 'Optimization algorithm '
+flags.DEFINE_integer('seed', 77, 'Seed to fix sequence of random values.')
+flags.DEFINE_string('optim', 'AdaGradProx', 'Optimization algorithm '
                             '(GradDescProx, Adam, AdaGradProx, GradDesc).')
-flags.DEFINE_string('decay', 'no', 'Polynomial (poly), cosine (cos), step or (no).')
+flags.DEFINE_string('decay', 'cos', 'Polynomial (poly), cosine (cos), step or (no).')
 flags.DEFINE_integer('special_tokens', 1, 'Whether to remove special tokens from'
                                        ' data files.')
 flags.DEFINE_string('focus', "", 'Whether to remove special tokens from'
@@ -99,6 +99,8 @@ def main(_):
     sess.run(tf.compat.v1.tables_initializer())
     sess.run(tf.compat.v1.global_variables_initializer())
     
+    sess.run(dataset.iterator_initializer)
+    
     print("optimizer: ", FLAGS.optim)
     print("epochs: ", FLAGS.epochs)
     print("model: ", FLAGS.arch)
@@ -134,7 +136,7 @@ def main(_):
     average_loss = 0.
     
     #for train_epoch in range(2, 1 + FLAGS.epochs):
-    sess.run(dataset.iterator_initializer)
+    # sess.run(dataset.iterator_initializer)
     while True:      
       try:
           result_dict = sess.run(to_be_run_dict)
