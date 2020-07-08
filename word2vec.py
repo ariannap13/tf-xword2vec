@@ -11,7 +11,7 @@ class Word2VecModel(object):
   """
 
   def __init__(self, arch, algm, embed_size, batch_size, negatives, power,
-               alpha, min_alpha, add_bias, random_seed, optim, decay):
+               alpha, min_alpha, add_bias, random_seed, optim, decay, max_grad):
     """Constructor.
 
     Args:
@@ -29,7 +29,8 @@ class Word2VecModel(object):
       random_seed: int scalar, random_seed if equal to zero.
       optim: string, ('GradDesc', 'AdaGradProx', 'GradDescProx', 'Adam').
       decay: string, polynomial, cosine decay, linear 
-      ('poly', 'cos', 'lin', 'step', 'no')
+            ('poly', 'cos', 'lin', 'step', 'no')
+      max_grad: float scalar, absolute max value of gradient.
     """
     self._arch = arch
     self._algm = algm
@@ -43,6 +44,7 @@ class Word2VecModel(object):
     self._random_seed = random_seed
     self._optim = optim
     self._decay = decay
+    self._max_grad = max_grad
     
     self._inputs = None
     self._labels = None
@@ -79,6 +81,7 @@ class Word2VecModel(object):
       elif self._algm == 'hierarchical_softmax':
         loss = self._hierarchical_softmax_loss(
             inputs, labels, syn0, syn1, biases)
+      # to avoid exploding gradient and keep the gradient directions
       return loss
 
   def train(self, dataset, filenames, epochs):
@@ -149,7 +152,12 @@ class Word2VecModel(object):
     else:
       optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
       
-    grad_update_op = optimizer.minimize(loss, global_step=global_step)
+    # instead of direct minimize, gradient 
+    # grad_update_op = optimizer.minimize(loss, global_step=global_step)
+    gradients, variables = zip(*optimizer.compute_gradients(loss))
+    gradients, _ = tf.clip_by_global_norm(gradients, self._max_grad)
+    grad_update_op = optimizer.apply_gradients(zip(gradients, variables),
+                                               global_step=global_step)
     
     to_be_run_dict = {'grad_update_op': grad_update_op,
                       'loss': loss,
@@ -271,11 +279,9 @@ class Word2VecModel(object):
       if self._add_bias:
         logits += tf.gather(biases, points)
 
-      # float type dependency!
       loss.append(tf.nn.sigmoid_cross_entropy_with_logits(
-           labels=tf.cast(codes, dtype=tf.float32), logits=logits)) # to_float
+           labels=tf.cast(codes, dtype=tf.float32), logits=logits))
     loss = tf.concat(loss, axis=0)
-    return loss
 
   def _get_inputs_syn0(self, syn0, inputs):
     """Builds the activations of hidden layer given input words embeddings 
