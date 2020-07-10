@@ -33,7 +33,7 @@ flags.DEFINE_integer('batch_size', 500, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
                      'If > 0, the top `max_vocab_size` most frequent words'
                      ' are kept in vocabulary.')
-flags.DEFINE_integer('min_count', 30, 'Words whose counts < `min_count` are not'
+flags.DEFINE_integer('min_count', 31, 'Words whose counts < `min_count` are not'
                                      ' included in the vocabulary.')
 flags.DEFINE_float('sample', 0.03, 'Subsampling rate.')
 flags.DEFINE_integer('window_size', 6, 'Num of words on the left or right side' 
@@ -56,7 +56,7 @@ flags.DEFINE_string('decay', 'no', 'Polynomial (poly), cosine (cos), step or (no
 flags.DEFINE_integer('special_tokens', 1, 'Whether to remove special tokens from'
                                        ' data files.')
 flags.DEFINE_float('max_grad', 5.0, 'Max norm of loss to avoid exploding gradient.')
-flags.DEFINE_string('focus', "artigo", 'Whether to remove special tokens from'
+flags.DEFINE_string('focus', "", 'Whether to remove special tokens from'
                                        ' data files.')
 
 FLAGS = flags.FLAGS
