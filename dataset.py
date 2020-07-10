@@ -2,27 +2,22 @@ import heapq
 import itertools
 import collections
 import string
+import re
+import os
 import numpy as np
 import tensorflow as tf
-
 from functools import partial
 
+# out of vocabulary
 OOV_ID = -1
 
-def remove_tokens(line):
-  import re
-  protect_ini = u"\uFF5F"         # "｟"  # U+FF5F
-  protect_end = u"\uFF60"         # "｠"  # U+FF60
-  connector = u"\uffed"           # "￭"
-  spacer = u"\u2581"              # "▁"
-  regex = protect_ini + "[^" + protect_end + "]*" + protect_end
-  line = re.sub(regex, "", line)
-  line = line.replace('" ', "")
-  line = line.replace(" " + connector, "")
-  line = line.replace(spacer, "")
-  if not set(string.ascii_lowercase).intersection(line.lower()):
-    line = ""
-  return line
+# regex or special tokens
+protect_ini = u"\uFF5F"         # "｟"  # U+FF5F
+protect_end = u"\uFF60"         # "｠"  # U+FF60
+connector = u"\uffed"           # "￭"
+spacer = u"\u2581"              # "▁"
+regex = protect_ini + "[^" + protect_end + "]*" + protect_end + " "
+partial_end = " ￭ . ｟mrk_case_modifier_c｠ "
 
 class Word2VecDataset(object):
   """Dataset for generating matrices holding word indices to train Word2Vec 
@@ -31,13 +26,14 @@ class Word2VecDataset(object):
   def __init__(self,
                arch='skip_gram',
                algm='negative_sampling',
-               batch_size=100,
+               batch_size=500,
                max_vocab_size=0,
-               min_count=2,
+               min_count=30,
                sample=1e-3,
-               window_size=5,
+               window_size=6,
                special_tokens=0,
-               focus=""):
+               focus="",
+               out_dir="data/out"):
     """Constructor.
     Args:
       arch: string scalar, architecture ('skip_gram' or 'cbow').
@@ -55,6 +51,10 @@ class Word2VecDataset(object):
       special_tokens: int scalar, that is converted to boolean. If zero, there is
         not any special token in the data. Else, the special tokens will be removed,
         considering the special tokens used in pyonmttok tokenizer.
+      focus: string scalar, focus word to research. 
+        Only lines with this word will be used.
+      out_dir: string scalar, contains the output folder. 
+        Combined filenames will be created in the same folder.
     """
     self._arch = arch
     self._algm = algm
@@ -72,8 +72,10 @@ class Word2VecDataset(object):
     self._corpus_size = None
     self._max_depth = None
     
-    self._focus = focus
-    self._clean_filenames = "clean_filenames.txt"
+    self._focus = str(focus)
+    self._out_dir = out_dir
+    self._comb_filenames = ""
+
     
   @property
   def iterator_initializer(self):
@@ -95,10 +97,39 @@ class Word2VecDataset(object):
   def focus(self):
     return self._focus
   
-  # to change focus value
   @focus.setter
   def focus(self, v):
     self._focus = str(v)
+    
+  @property
+  def comb_filenames(self):
+    return self._comb_filenames
+
+  def remove_tokens(self, dline):
+    dline = dline.replace(" ￭ - ￭ ", "-")
+    dline = re.sub(regex, "", dline)
+    dline = dline.replace('" ', "")
+    dline = dline.replace(" " + connector, "")
+    dline = dline.replace(spacer, "")
+    if not set(string.ascii_lowercase).intersection(dline.lower()):
+      dline = ""
+    return dline
+ 
+  
+  def set_comb_filenames(self):
+    self._focus = self._focus.strip()
+    if self._focus == "":
+      if self._special_tokens:
+        comb_filenames = "clean_filenames.txt"
+      else: 
+        comb_filenames = None
+    else:
+      if self._special_tokens:
+        comb_filenames = "clean_filenames_focus_" +  self._focus + ".txt"
+      else:
+        comb_filenames = "full_filenames_focus_" +  self._focus + ".txt"
+    return os.path.join(self._out_dir, comb_filenames)
+    
 
   def _build_raw_vocab(self, filenames):
     """Builds raw vocabulary.
@@ -108,19 +139,28 @@ class Word2VecDataset(object):
       raw_vocab: a list of 2-tuples holding the word (string) and count (int),
         sorted in descending order of word count. 
     """
+    self._comb_filenames = self.set_comb_filenames()
     map_open = partial(open, encoding="utf-8")
     lines = itertools.chain(*map(map_open, filenames))
     raw_vocab = collections.Counter()
-    if self._special_tokens: 
-      fcomb = open(self._clean_filenames,"w", encoding="utf-8")
+    if self._special_tokens or len(self._focus) > 0:
+      fcomb = open(self._comb_filenames,"w", encoding="utf-8")
     for line in lines:
-      if self._special_tokens: 
-        line = remove_tokens(line)
-        if line.strip() == "": continue
-        else:
-          fcomb.write(line)
-      raw_vocab.update(line.strip().split())
-    if self._special_tokens: 
+        paragraph = line.split(partial_end)
+        # broken paragraph
+        for line in paragraph:
+          if self._special_tokens:
+            line = self.remove_tokens(line)
+            if len(line.strip()) == 0: 
+              continue
+          if len(self._focus) == 0:
+            fcomb.write(line)
+          elif not self._focus in line:
+            continue
+          else:
+            fcomb.write(line)            
+          raw_vocab.update(line.strip().split())
+    if self._special_tokens or len(self._focus) > 0: 
       fcomb.close()
     raw_vocab = raw_vocab.most_common()
     if self._max_vocab_size > 0:
@@ -267,24 +307,8 @@ class Word2VecDataset(object):
     keep_probs = tf.constant(keep_probs)
 
     if self._special_tokens or self._focus != "":
-      if self._focus == "":
-        comb_file = self._clean_filenames
-      else:
-        if self._special_tokens: 
-          comb_file = "clean_filenames_focus_" + self._focus + ".txt"
-          list_lines = list(open(self._clean_filenames, encoding="utf-8"))
-        else:
-          comb_file = "filenames_focus_" + self._focus + ".txt"
-          list_lines = []
-          for fn in filenames:
-            list_lines = list_lines + list(open(fn, encoding="utf-8"))
-        # filter list_focus
-        fo = open(comb_file, "w", encoding="utf-8")
-        for line in list_lines:
-          if self._focus in line:
-            fo.write(line)
-        fo.close()
-      comb_file = [comb_file]
+      # name was resolved building vocabulary
+      comb_file = [self._comb_filenames]
     else:
       comb_file = filenames
       
