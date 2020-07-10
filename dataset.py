@@ -112,7 +112,7 @@ class Word2VecDataset(object):
     dline = dline.replace(" " + connector, "")
     dline = dline.replace(spacer, "")
     dline = dline.replace(" " * 2, " ")
-    dline = dline.replace("｟mrk_end_case_region_u｠")
+    dline = dline.replace("｟mrk_end_case_region_u｠", "")
     dline = re.sub(r'[…\”\»@\'\(\)\[\]\{\}]', '', dline)
     dline = re.sub(r'[^\x00-\x7F\x80-\xFF\u0100-\u017F\u0180-\u024F\u1E00-\u1EFF]', '', dline) 
     if not set(string.ascii_lowercase).intersection(dline.lower()):
