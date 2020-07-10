@@ -29,7 +29,7 @@ flags.DEFINE_string('arch', 'cbow', 'Architecture (skip_gram or cbow).')
 flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
     '(negative_sampling or hierarchical_softmax).')
 flags.DEFINE_integer('epochs', 1, 'Num of epochs to iterate training data.')
-flags.DEFINE_integer('batch_size', 1000, 'Batch size.')
+flags.DEFINE_integer('batch_size', 500, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
                      'If > 0, the top `max_vocab_size` most frequent words'
                      ' are kept in vocabulary.')
@@ -39,7 +39,7 @@ flags.DEFINE_float('sample', 0.03, 'Subsampling rate.')
 flags.DEFINE_integer('window_size', 6, 'Num of words on the left or right side' 
                                        ' of target word within a window.')
 flags.DEFINE_integer('embed_size', 200, 'Length of word vector.')
-flags.DEFINE_integer('negatives', 10, 'Num of negative words to sample.')
+flags.DEFINE_integer('negatives', 5, 'Num of negative words to sample.')
 flags.DEFINE_float('power', 0.75, 'Distortion for negative sampling.')
 flags.DEFINE_float('alpha', 0.025, 'Initial learning rate.')
 flags.DEFINE_float('min_alpha', 0.003, 'Final learning rate and recommended Adam lr.')
@@ -56,7 +56,7 @@ flags.DEFINE_string('decay', 'no', 'Polynomial (poly), cosine (cos), step or (no
 flags.DEFINE_integer('special_tokens', 1, 'Whether to remove special tokens from'
                                        ' data files.')
 flags.DEFINE_float('max_grad', 5.0, 'Max norm of loss to avoid exploding gradient.')
-flags.DEFINE_string('focus', "", 'Whether to remove special tokens from'
+flags.DEFINE_string('focus', "artigo", 'Whether to remove special tokens from'
                                        ' data files.')
 
 FLAGS = flags.FLAGS
@@ -71,9 +71,9 @@ def main(_):
                             sample=FLAGS.sample,
                             window_size=FLAGS.window_size,
                             special_tokens=FLAGS.special_tokens,
-                            focus=FLAGS.focus)
+                            focus=FLAGS.focus,
+                            out_dir=FLAGS.out_dir)
   
-  dataset.focus = ""  
   dataset.build_vocab(FLAGS.filenames)
 
   word2vec = Word2VecModel(arch=FLAGS.arch,
@@ -161,7 +161,7 @@ def main(_):
       op_lr = result_dict['learning_rate']
       average_loss += result_dict['loss'].mean()
       train_progress = result_dict['progress_rate']
-      train_epoch = result_dict['epoch']
+      train_epoch = round(result_dict['epoch'])
       if step == 1:
         # first one syn0 = embeddings
         syn0_partial = sess.run(word2vec.syn0)
