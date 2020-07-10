@@ -28,7 +28,7 @@ flags = tf.app.flags
 flags.DEFINE_string('arch', 'cbow', 'Architecture (skip_gram or cbow).')
 flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
     '(negative_sampling or hierarchical_softmax).')
-flags.DEFINE_integer('epochs', 1, 'Num of epochs to iterate training data.')
+flags.DEFINE_integer('epochs', 2, 'Num of epochs to iterate training data.')
 flags.DEFINE_integer('batch_size', 500, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
                      'If > 0, the top `max_vocab_size` most frequent words'
