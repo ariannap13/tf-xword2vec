@@ -106,14 +106,16 @@ class Word2VecDataset(object):
     return self._comb_filenames
 
   def remove_tokens(self, dline):
+    dline = dline.replace("｟mrk_case_modifier_c｠ ", "")
+    dline = dline.replace(" ｟mrk_end_case_region_u｠", "")
+    dline = dline.replace("｟mrk_begin_case_region_u｠ ", "")
     dline = dline.replace(" ￭ - ￭ ", "-")
     dline = re.sub(regex, "", dline)
     dline = dline.replace('" ', "")
     dline = dline.replace(" " + connector, "")
     dline = dline.replace(spacer, "")
     dline = dline.replace(" " * 2, " ")
-    dline = dline.replace("｟mrk_end_case_region_u｠", "")
-    dline = re.sub(r'[…\”\»@\'\(\)\[\]\{\}]', '', dline)
+    dline = re.sub(r'[…\”»«@\'\(\)\[\]\{\}]', '', dline)
     dline = re.sub(r'[^\x00-\x7F\x80-\xFF\u0100-\u017F\u0180-\u024F\u1E00-\u1EFF]', '', dline) 
     if not set(string.ascii_lowercase).intersection(dline.lower()):
       dline = ""
