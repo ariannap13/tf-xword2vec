@@ -147,7 +147,9 @@ class Word2VecModel(object):
                             learning_rate)
     elif self._optim == 'GradDescProx':
       optimizer = tf.compat.v1.train.ProximalGradientDescentOptimizer(
-                            learning_rate)
+                            learning_rate,
+                            l1_regularization_strength=0.001,
+                            l2_regularization_strength=0.001)
     else:
       optimizer = tf.compat.v1.train.GradientDescentOptimizer(learning_rate)
       
