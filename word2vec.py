@@ -81,7 +81,6 @@ class Word2VecModel(object):
       elif self._algm == 'hierarchical_softmax':
         loss = self._hierarchical_softmax_loss(
             inputs, labels, syn0, syn1, biases)
-      # to avoid exploding gradient and keep the gradient directions
       return loss
 
   def train(self, dataset, filenames, epochs):
