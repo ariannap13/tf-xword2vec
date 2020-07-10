@@ -162,6 +162,7 @@ def main(_):
       average_loss += result_dict['loss'].mean()
       train_progress = result_dict['progress_rate']
       train_epoch = round(result_dict['epoch'])
+      train_epoch = int(train_epoch)
       if step == 1:
         # first one syn0 = embeddings
         syn0_partial = sess.run(word2vec.syn0)
