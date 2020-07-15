@@ -156,7 +156,9 @@ class Word2VecModel(object):
     # instead of direct minimize, gradient 
     # grad_update_op = optimizer.minimize(loss, global_step=global_step)
     gradients, variables = zip(*optimizer.compute_gradients(loss))
-    gradients, _ = tf.clip_by_global_norm(gradients, self._max_grad)
+    gradients = [
+      None if gradient is None else tf.clip_by_norm(gradient, self._max_grad)
+      for gradient in gradients]
     grad_update_op = optimizer.apply_gradients(zip(gradients, variables),
                                                global_step=global_step)
     
@@ -283,6 +285,7 @@ class Word2VecModel(object):
       loss.append(tf.nn.sigmoid_cross_entropy_with_logits(
            labels=tf.cast(codes, dtype=tf.float32), logits=logits))
     loss = tf.concat(loss, axis=0)
+    return loss
 
   def _get_inputs_syn0(self, syn0, inputs):
     """Builds the activations of hidden layer given input words embeddings 

@@ -26,26 +26,26 @@ import data_util as du
 flags = tf.app.flags
 
 flags.DEFINE_string('arch', 'cbow', 'Architecture (skip_gram or cbow).')
-flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
+flags.DEFINE_string('algm', 'hierarchical_softmax', 'Training algorithm '
     '(negative_sampling or hierarchical_softmax).')
 flags.DEFINE_integer('epochs', 7, 'Num of epochs to iterate training data.')
-flags.DEFINE_integer('batch_size', 1000, 'Batch size.')
+flags.DEFINE_integer('batch_size', 500, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. '
                      'If > 0, the top `max_vocab_size` most frequent words'
                      ' are kept in vocabulary.')
 flags.DEFINE_integer('min_count', 31, 'Words whose counts < `min_count` are not'
                                      ' included in the vocabulary.')
-flags.DEFINE_float('sample', 0.001, 'Subsampling rate.')
-flags.DEFINE_integer('window_size', 6, 'Num of words on the left or right side' 
+flags.DEFINE_float('sample', 0.03, 'Subsampling rate.')
+flags.DEFINE_integer('window_size', 5, 'Num of words on the left or right side' 
                                        ' of target word within a window.')
-flags.DEFINE_integer('embed_size', 200, 'Length of word vector.')
-flags.DEFINE_integer('negatives', 10, 'Num of negative words to sample.')
+flags.DEFINE_integer('embed_size', 300, 'Length of word vector.')
+flags.DEFINE_integer('negatives', 1, 'Num of negative words to sample.')
 flags.DEFINE_float('power', 0.75, 'Distortion for negative sampling.')
-flags.DEFINE_float('alpha', 0.025, 'Initial learning rate.')
+flags.DEFINE_float('alpha', 0.024, 'Initial learning rate.')
 flags.DEFINE_float('min_alpha', 0.003, 'Final learning rate and recommended Adam lr.')
 flags.DEFINE_boolean('add_bias', True, 'Whether to add bias term to dotproduct'
                                        ' between syn0 and syn1 vectors.')
-flags.DEFINE_integer('log_per_steps', 500, 'Every `log_per_steps` steps to '
+flags.DEFINE_integer('log_per_steps', 100, 'Every `log_per_steps` steps to '
                                             ' output logs.')
 flags.DEFINE_list('filenames', 'data/tok_2012.pt', 'Names of comma-separated input text files.')
 flags.DEFINE_string('out_dir', 'data/out', 'Output directory.')
