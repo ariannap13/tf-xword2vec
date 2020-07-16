@@ -197,8 +197,10 @@ class Word2VecModel(object):
                         -1/self._embed_size, 1/self._embed_size,
                         seed=self._random_seed))
       syn1 = tf.compat.v1.get_variable(
-          'syn1', initializer=tf.random.uniform([syn1_rows,
-          self._embed_size], -0.1, 0.1, seed=self._random_seed))
+          'syn1', initializer=tf.random.normal(
+                        [syn1_rows, self._embed_size],
+                        -1/self._embed_size, 1/self._embed_size,
+                        seed=self._random_seed))
       biases = tf.compat.v1.get_variable('biases', 
                                          initializer=tf.zeros([syn1_rows]))
     return syn0, syn1, biases
