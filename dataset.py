@@ -16,8 +16,9 @@ protect_ini = u"\uFF5F"         # "｟"  # U+FF5F
 protect_end = u"\uFF60"         # "｠"  # U+FF60
 connector = u"\uffed"           # "￭"
 spacer = u"\u2581"              # "▁"
-regex = protect_ini + "[^" + protect_end + "]*" + protect_end
-partial_end = " ￭ . ｟mrk_case_modifier_c｠ "
+regex_code = protect_ini + "[^" + protect_end + "]*" + protect_end
+#partial_end = " ￭ . ｟mrk_case_modifier_c｠ "
+regex_partial_end = r"( ￭ \. ｟mrk_case_modifier_c｠)|( ￭ \. ｟mrk_begin_case_region_u｠)"
 
 class Word2VecDataset(object):
   """Dataset for generating matrices holding word indices to train Word2Vec 
@@ -110,13 +111,16 @@ class Word2VecDataset(object):
     dline = dline.replace(" ｟mrk_end_case_region_u｠", "")
     dline = dline.replace("｟mrk_begin_case_region_u｠ ", "")
     dline = dline.replace(" ￭ - ￭ ", "-")
-    dline = re.sub(regex, "", dline)
+    dline = re.sub(regex_code, "", dline)
     dline = dline.replace('" ', "")
     dline = dline.replace(" " + connector, "")
     dline = dline.replace(spacer, "")
     dline = dline.replace(" " * 2, " ")
+    # remove numbers
+    #dline = re.sub(r'\d+', '', dline)
     dline = re.sub(r'[…\”»«@\'\(\)\[\]\{\}]', '', dline)
     dline = re.sub(r'[^\x00-\x7F\x80-\xFF\u0100-\u017F\u0180-\u024F\u1E00-\u1EFF]', '', dline) 
+    dline = dline.replace(" " * 2, " ")
     if not set(string.ascii_lowercase).intersection(dline.lower()):
       dline = ""
     return dline
@@ -152,7 +156,8 @@ class Word2VecDataset(object):
     if self._special_tokens or len(self._focus) > 0:
       fcomb = open(self._comb_filenames,"w", encoding="utf-8")
     for line in lines:
-        paragraph = line.split(partial_end)
+        #paragraph = line.split(partial_end)
+        paragraph = re.split(regex_partial_end, line)
         # broken paragraph
         for line in paragraph:
           if self._special_tokens:
