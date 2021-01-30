@@ -159,18 +159,24 @@ class Word2VecDataset(object):
         #paragraph = line.split(partial_end)
         paragraph = re.split(regex_partial_end, line)
         # broken paragraph
-        for line in paragraph:
-          if self._special_tokens:
-            line = self.remove_tokens(line)
-            if len(line.strip()) == 0: 
-              continue
-          if len(self._focus) == 0:
-            fcomb.write(line)
-          elif not self._focus in line:
-            continue
-          else:
-            fcomb.write(line)            
-          raw_vocab.update(line.strip().split())
+        for sline in paragraph:
+            if sline:
+              if self._special_tokens:
+                sline = self.remove_tokens(sline)
+                sline = sline.strip()
+              if len(sline) == 0: 
+                continue
+              if len(self._focus) == 0:
+                fcomb.write(sline)
+              elif not self._focus in sline:
+                continue
+              else:
+                fcomb.write(sline)
+              # update vocab
+              raw_vocab.update(sline.strip().split())
+            #else:
+            #  print("None")
+              
     if self._special_tokens or len(self._focus) > 0: 
       fcomb.close()
     raw_vocab = raw_vocab.most_common()
