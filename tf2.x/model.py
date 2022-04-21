@@ -58,12 +58,15 @@ class Word2VecModel(tf.keras.Model):
                     shape=[self._vocab_size, self._hidden_size],
                     initializer=tf.keras.initializers.RandomUniform(
                         minval=-0.5/self._hidden_size,
-                        maxval=0.5/self._hidden_size))
+                        maxval=0.5/self._hidden_size,
+                        seed=self._random_seed))
     
     self.add_weight('syn1',
                     shape=[self._input_size, self._hidden_size],
                     initializer=tf.keras.initializers.RandomUniform(
-                        minval=-0.1, maxval=0.1))
+                        minval=-0.1, 
+                        maxval=0.1,
+                        seed=self._random_seed))
 
     self.add_weight('biases', 
                     shape=[self._input_size], 

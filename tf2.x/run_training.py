@@ -23,6 +23,7 @@ from dataset import Word2VecDatasetBuilder
 from model import Word2VecModel
 from word_vectors import WordVectors
 
+import path_config
 import utils
 
 flags.DEFINE_string('arch', 'skip_gram', 'Architecture (skip_gram or cbow).')
@@ -49,8 +50,8 @@ flags.DEFINE_boolean('add_bias', True, 'Whether to add bias term to dotproduct '
 flags.DEFINE_integer('log_per_steps', 10000, 'Every `log_per_steps` steps to '
     ' log the value of loss to be minimized.')
 flags.DEFINE_list(
-    'filenames', None, 'Names of comma-separated input text files.')
-flags.DEFINE_string('out_dir', '/tmp/word2vec', 'Output directory.')
+    'filenames',  path_config.corpus_path, 'Names of comma-separated input text files.')
+flags.DEFINE_string('out_dir', path_config.output_path, 'Output directory.')
 
 FLAGS = flags.FLAGS
 
@@ -78,6 +79,9 @@ def main(_):
       max_vocab_size=max_vocab_size, min_count=min_count, sample=sample)
   tokenizer.build_vocab(filenames)
 
+
+  # TODO fix , sentences separated like [SPACE][DOT][SPACE]
+  # file must be list of sentences \n separated
   builder = Word2VecDatasetBuilder(tokenizer,
                                    arch=arch,
                                    algm=algm,
@@ -85,6 +89,7 @@ def main(_):
                                    batch_size=batch_size,
                                    window_size=window_size)
   dataset = builder.build_dataset(filenames)
+
   word2vec = Word2VecModel(tokenizer.unigram_counts,
                arch=arch,
                algm=algm,
@@ -140,13 +145,13 @@ def main(_):
       average_loss = 0.
 
   syn0_final = word2vec.weights[0].numpy()
-  np.save(os.path.join(FLAGS.out_dir, 'syn0_final'), syn0_final)
-  with tf.io.gfile.GFile(os.path.join(FLAGS.out_dir, 'vocab.txt'), 'w') as f:
+  np.save(os.path.join(out_dir, 'syn0_final'), syn0_final)
+  with tf.io.gfile.GFile(os.path.join(out_dir, 'vocab.txt'), 'w') as f:
     for w in tokenizer.table_words:
       f.write(w + '\n')
   print('Word embeddings saved to', 
-      os.path.join(FLAGS.out_dir, 'syn0_final.npy'))
-  print('Vocabulary saved to', os.path.join(FLAGS.out_dir, 'vocab.txt'))
+      os.path.join(out_dir, 'syn0_final.npy'))
+  print('Vocabulary saved to', os.path.join(out_dir, 'vocab.txt'))
 
 
 if __name__ == '__main__':
