@@ -11,17 +11,17 @@ OOV_ID = -1
 
 
 class WordTokenizer(object):
-  """Vanilla word tokenizer that spits out space-separated tokens from raw text 
-  string. Note for non-space separated languages, the corpus must be 
+  """Vanilla word tokenizer that spits out space-separated tokens from raw text
+  string. Note for non-space separated languages, the corpus must be
   pre-tokenized such that tokens are space-delimited.
   """
-  def __init__(self, max_vocab_size=0, min_count=10, sample=1e-3):
+  def __init__(self, max_vocab_size=0, min_count=1, sample=1e-3):
     """Constructor.
 
     Args:
-      max_vocab_size: int scalar, maximum vocabulary size. If > 0, only the top 
+      max_vocab_size: int scalar, maximum vocabulary size. If > 0, only the top
         `max_vocab_size` most frequent words will be kept in vocabulary.
-      min_count: int scalar, words whose counts < `min_count` will not be 
+      min_count: int scalar, words whose counts < `min_count` will not be
         included in the vocabulary.
       sample: float scalar, subsampling rate.
     """
@@ -29,7 +29,7 @@ class WordTokenizer(object):
     self._min_count = min_count
     self._sample = sample
 
-    self._vocab = None 
+    self._vocab = None
     self._table_words = None
     self._unigram_counts = None
     self._keep_probs = None
@@ -43,15 +43,15 @@ class WordTokenizer(object):
     return self._table_words
 
   def _build_raw_vocab(self, filenames):
-    """Builds raw vocabulary by iterate through the corpus once and count the 
+    """Builds raw vocabulary by iterate through the corpus once and count the
     unique words.
 
     Args:
       filenames: list of strings, holding names of text files.
 
-    Returns: 
+    Returns:
       raw_vocab: a list of 2-tuples holding the word (string) and count (int),
-        sorted in descending order of word count. 
+        sorted in descending order of word count.
     """
     lines = []
     for fn in filenames:
@@ -67,11 +67,11 @@ class WordTokenizer(object):
     if self._max_vocab_size > 0:
       raw_vocab = raw_vocab[:self._max_vocab_size]
     return raw_vocab
-   
+
   def build_vocab(self, filenames):
     """Builds the vocabulary.
 
-    Has the side effect of setting the following attributes: for each word 
+    Has the side effect of setting the following attributes: for each word
     `word` we have
 
     vocab[word] = index
@@ -100,7 +100,7 @@ class WordTokenizer(object):
       self._keep_probs.append(keep_prob)
 
   def encode(self, string):
-    """Split raw text string into tokens (space-separated) and tranlate to token 
+    """Split raw text string into tokens (space-separated) and tranlate to token
     ids.
 
     Args:
@@ -110,7 +110,7 @@ class WordTokenizer(object):
       ids: a list of ints, the token ids of the tokenized string.
     """
     tokens = string.strip().split()
-    ids = [self._vocab[token] if token in self._vocab else OOV_ID 
+    ids = [self._vocab[token] if token in self._vocab else OOV_ID
         for token in tokens]
     return ids
 
@@ -131,7 +131,7 @@ class Word2VecDatasetBuilder(object):
     Args:
       epochs: int scalar, num times the dataset is iterated.
       batch_size: int scalar, the returned tensors in `get_tensor_dict` have
-        shapes [batch_size, :]. 
+        shapes [batch_size, :].
       window_size: int scalar, num of words on the left or right side of
         target word within a window.
     """
@@ -168,7 +168,7 @@ class Word2VecDatasetBuilder(object):
     for i in range(vocab_size - 1):
       min1, min2 = heapq.heappop(heap), heapq.heappop(heap)
       heapq.heappush(heap, [min1[0] + min2[0], i + vocab_size, min1, min2])
-    # At this point we have a len-1 heap, and `heap[0]` will be the root of 
+    # At this point we have a len-1 heap, and `heap[0]` will be the root of
     # the binary tree; where internal nodes store
     # 1. key (frequency)
     # 2. vocab index
@@ -178,16 +178,16 @@ class Word2VecDatasetBuilder(object):
     # 1. key (frequencey)
     # 2. vocab index
 
-    # Traverse the Huffman tree rooted at `heap[0]` in the order of 
+    # Traverse the Huffman tree rooted at `heap[0]` in the order of
     # Depth-First-Search. Each stack item stores the
     # 1. `node`
     # 2. code of the `node` (list)
     # 3. point of the `node` (list)
     #
-    # `point` is the list of vocab IDs of the internal nodes along the path from 
+    # `point` is the list of vocab IDs of the internal nodes along the path from
     # the root up to `node` (not included)
     # `code` is the list of labels (0 or 1) of the edges along the path from the
-    # root up to `node` 
+    # root up to `node`
     # they are empty lists for the root node `heap[0]`
     node_list = []
     max_depth, stack = 0, [[heap[0], [], []]] # stack: [root, codde, point]
@@ -221,7 +221,7 @@ class Word2VecDatasetBuilder(object):
 
     Args:
       filenames: list of strings, holding names of text files.
-      
+
     Returns:
       dataset: a tf.data.Dataset instance, holding the a tuple of tensors
         (inputs, labels, progress)
@@ -233,7 +233,7 @@ class Word2VecDatasetBuilder(object):
           inputs: [N],                    labels: [N, 2*max_depth+1]
         when arch=='cbow', algm=='hierarchical_softmax'
           inputs: [N, 2*window_size+1],   labels: [N, 2*max_depth+1]
-        progress: [N], the percentage of sentences covered so far. Used to 
+        progress: [N], the percentage of sentences covered so far. Used to
           compute learning rate.
     """
     unigram_counts = self._tokenizer._unigram_counts
@@ -245,11 +245,11 @@ class Word2VecDatasetBuilder(object):
       codes_points = None
     else:
       raise ValueError('algm must be hierarchical_softmax or negative_sampling')
-   
+
     keep_probs = tf.cast(tf.constant(keep_probs), 'float32')
 
     # total num of sentences (lines) across text files times num of epochs
-    num_sents = sum([len(list(tf.io.gfile.GFile(fn))) 
+    num_sents = sum([len(list(tf.io.gfile.GFile(fn)))
         for fn in filenames]) * self._epochs
 
     def generator_fn():
@@ -259,31 +259,43 @@ class Word2VecDatasetBuilder(object):
             for line in f:
               yield self._tokenizer.encode(line)
 
+    def create_diz():
+      for _ in range(self._epochs):
+        for fn in filenames:
+          for index in range(len(fn)):
+            yield index
+
+    nsent_singleepoch = sum([len(list(tf.io.gfile.GFile(fn)))
+        for fn in filenames])
+
+
     # dataset: [([int], float)]
     dataset = tf.data.Dataset.zip((
         tf.data.Dataset.from_generator(generator_fn, tf.int64, [None]),
-        tf.data.Dataset.from_tensor_slices(tf.range(num_sents) / num_sents)))
+        tf.data.Dataset.from_tensor_slices(tf.range(num_sents) / num_sents),
+        tf.data.Dataset.from_tensor_slices(tf.repeat([[i for i in range(nsent_singleepoch)]], repeats=self._epochs))))
     # dataset: [([int], float)]
-    dataset = dataset.map(lambda indices, progress: 
-        (subsample(indices, keep_probs), progress))
+    dataset = dataset.map(lambda indices, progress, nsent:
+        (subsample(indices, keep_probs), progress, nsent))
     # dataset: [([int], float)]
-    dataset = dataset.filter(lambda indices, progress: 
+    dataset = dataset.filter(lambda indices, progress, nsent:
         tf.greater(tf.size(indices), 1))  # sentence must have at least 2 tokens
     # dataset: [((None, None), float)]
-    dataset = dataset.map(lambda indices, progress: (generate_instances(
-        indices, self._arch, self._window_size, self._max_depth, codes_points), 
-        progress))
+    # iter for each sentence, generate instances for each sentence
+    dataset = dataset.map(lambda indices, progress, nsent: (generate_instances(
+        indices, self._arch, self._window_size, self._max_depth, codes_points),
+        progress, nsent))
     # dataset: [((None, None)), (None,)]
-    dataset = dataset.map(lambda instances, progress: (
+    dataset = dataset.map(lambda instances, progress, nsent: (
         # replicate `progress` to size `tf.shape(instances)[:1]`
-        instances, tf.fill(tf.shape(instances)[:1], progress)))
-    dataset = dataset.flat_map(lambda instances, progress: 
+        instances, tf.fill(tf.shape(instances)[:1], progress), tf.fill(tf.shape(instances)[:1], nsent)))
+    dataset = dataset.flat_map(lambda instances, progress, nsent:
         # form a dataset by unstacking `instances` in the first dimension,
-        tf.data.Dataset.from_tensor_slices((instances, progress)))
+        tf.data.Dataset.from_tensor_slices((instances, progress, nsent)))
     # batch the dataset
     dataset = dataset.batch(self._batch_size, drop_remainder=True)
 
-    def prepare_inputs_labels(tensor, progress):
+    def prepare_inputs_labels(tensor, progress, nsent):
       if self._arch == 'skip_gram':
         if self._algm == 'negative_sampling':
           tensor.set_shape([self._batch_size, 2])
@@ -306,24 +318,25 @@ class Word2VecDatasetBuilder(object):
       if self._algm == 'negative_sampling':
         labels = tf.squeeze(labels, axis=1)
       progress = tf.cast(progress, 'float32')
-      return inputs, labels, progress
 
-    dataset = dataset.map(lambda tensor, progress: 
-        prepare_inputs_labels(tensor, progress))
+      return inputs, labels, progress, nsent
+
+    dataset = dataset.map(lambda tensor, progress, nsent:
+        prepare_inputs_labels(tensor, progress, nsent))
 
     return dataset
 
 
 def subsample(indices, keep_probs):
-  """Filters out-of-vocabulary words and then applies subsampling on words in a 
+  """Filters out-of-vocabulary words and then applies subsampling on words in a
   sentence. Words with high frequencies have lower keep probs.
 
   Args:
     indices: rank-1 int tensor, the word indices within a sentence.
-    keep_probs: rank-1 float tensor, the prob to drop the each vocabulary word. 
+    keep_probs: rank-1 float tensor, the prob to drop the each vocabulary word.
 
   Returns:
-    indices: rank-1 int tensor, the word indices within a sentence after 
+    indices: rank-1 int tensor, the word indices within a sentence after
       subsampling.
   """
   indices = tf.boolean_mask(indices, tf.not_equal(indices, OOV_ID))
@@ -335,21 +348,21 @@ def subsample(indices, keep_probs):
 
 def generate_instances(
     indices, arch, window_size, max_depth=None, codes_points=None):
-  """Generates matrices holding word indices to be passed to Word2Vec models 
-  for each sentence. The shape and contents of output matrices depends on the 
+  """Generates matrices holding word indices to be passed to Word2Vec models
+  for each sentence. The shape and contents of output matrices depends on the
   architecture ('skip_gram', 'cbow') and training algorithm ('negative_sampling'
   , 'hierarchical_softmax').
 
   It takes as input a list of word indices in a subsampled-sentence, where each
-  word is a target word, and their context words are those within the window 
-  centered at a target word. For skip gram architecture, `num_context_words` 
+  word is a target word, and their context words are those within the window
+  centered at a target word. For skip gram architecture, `num_context_words`
   instances are generated for a target word, and for cbow architecture, a single
   instance is generated for a target word.
 
-  If `codes_points` is not None ('hierarchical softmax'), the word to be 
-  predicted (context word for 'skip_gram', and target word for 'cbow') are 
-  represented by their 'codes' and 'points' in the Huffman tree (See 
-  `_build_binary_tree`). 
+  If `codes_points` is not None ('hierarchical softmax'), the word to be
+  predicted (context word for 'skip_gram', and target word for 'cbow') are
+  represented by their 'codes' and 'points' in the Huffman tree (See
+  `_build_binary_tree`).
 
   Args:
     indices: rank-1 int tensor, the word indices within a sentence after
@@ -357,13 +370,13 @@ def generate_instances(
     arch: scalar string, architecture ('skip_gram' or 'cbow').
     window_size: int scalar, num of words on the left or right side of
       target word within a window.
-    max_depth: (Optional) int scalar, the max depth of the Huffman tree. 
-    codes_points: (Optional) an int tensor of shape [vocab_size, 2*max_depth+1] 
-      where each row holds the codes (0-1 binary values) padded to `max_depth`, 
-      and points (non-leaf node indices) padded to `max_depth`, of each 
-      vocabulary word. The last entry is the true length of code and point 
+    max_depth: (Optional) int scalar, the max depth of the Huffman tree.
+    codes_points: (Optional) an int tensor of shape [vocab_size, 2*max_depth+1]
+      where each row holds the codes (0-1 binary values) padded to `max_depth`,
+      and points (non-leaf node indices) padded to `max_depth`, of each
+      vocabulary word. The last entry is the true length of code and point
       (<= `max_depth`).
-    
+
   Returns:
     instances: an int tensor holding word indices, with shape being
       when arch=='skip_gram', algm=='negative_sampling'
@@ -382,7 +395,7 @@ def generate_instances(
     """
     reduced_size = tf.random.uniform([], maxval=window_size, dtype='int32')
     left = tf.range(tf.maximum(index - window_size + reduced_size, 0), index)
-    right = tf.range(index + 1, 
+    right = tf.range(index + 1,
         tf.minimum(index + 1 + window_size - reduced_size, tf.size(indices)))
     context = tf.concat([left, right], axis=0)
     context = tf.gather(indices, context)
@@ -390,12 +403,12 @@ def generate_instances(
     if arch == 'skip_gram':
       # replicate `indices[index]` to match the size of `context`
       # [N, 2]
-      window = tf.stack([tf.fill(tf.shape(context), indices[index]), 
+      window = tf.stack([tf.fill(tf.shape(context), indices[index]),
                         context], axis=1)
     elif arch == 'cbow':
       true_size = tf.size(context)
       # pad `context` to length `2 * window_size`
-      window = tf.concat([tf.pad(context, [[0, 2*window_size-true_size]]), 
+      window = tf.concat([tf.pad(context, [[0, 2*window_size-true_size]]),
                           [true_size, indices[index]]], axis=0)
       # [1, 2*window_size + 2]
       window = tf.expand_dims(window, axis=0)
@@ -404,18 +417,19 @@ def generate_instances(
 
     if codes_points is not None:
       # [N, 2*max_depth + 2] or [1, 2*window_size+2*max_depth+2]
-      window = tf.concat([window[:, :-1], 
+      window = tf.concat([window[:, :-1],
                           tf.gather(codes_points, window[:, -1])], axis=1)
     return index + 1, init_array.write(index, window)
 
   size = tf.size(indices)
   # initialize a tensor array of length `tf.size(indices)`
   init_array = tf.TensorArray('int64', size=size, infer_shape=False)
+  # for each target word in sentence, define context
   _, result_array = tf.while_loop(lambda i, ta: i < size,
-                                  per_target_fn, 
+                                  per_target_fn,
                                   [0, init_array],
                                       back_prop=False)
-  instances = tf.cast(result_array.concat(), 'int64')
+  instances = tf.cast(result_array.concat(), 'int64') # concatenate in a matrix, each row is referred to a target word and the array represents the context
   if arch == 'skip_gram':
     if max_depth is None:
       instances.set_shape([None, 2])

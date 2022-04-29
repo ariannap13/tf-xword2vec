@@ -23,8 +23,20 @@ from dataset import Word2VecDatasetBuilder
 from model import Word2VecModel
 from word_vectors import WordVectors
 
-import path_config
 import utils
+
+from collections import Counter
+
+import warnings
+warnings.filterwarnings('ignore')
+
+resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='')
+tf.config.experimental_connect_to_cluster(resolver)
+# This is the TPU initialization code that has to be at the beginning.
+tf.tpu.experimental.initialize_tpu_system(resolver)
+print("All devices: ", tf.config.list_logical_devices('TPU'))
+strategy = tf.distribute.TPUStrategy(resolver)
+
 
 flags.DEFINE_string('arch', 'skip_gram', 'Architecture (skip_gram or cbow).')
 flags.DEFINE_string('algm', 'negative_sampling', 'Training algorithm '
@@ -33,10 +45,10 @@ flags.DEFINE_integer('epochs', 1, 'Num of epochs to iterate thru corpus.')
 flags.DEFINE_integer('batch_size', 256, 'Batch size.')
 flags.DEFINE_integer('max_vocab_size', 0, 'Maximum vocabulary size. If > 0, '
     'the top `max_vocab_size` most frequent words will be kept in vocabulary.')
-flags.DEFINE_integer('min_count', 10, 'Words whose counts < `min_count` will '
+flags.DEFINE_integer('min_count', 1, 'Words whose counts < `min_count` will '
     'not be included in the vocabulary.')
 flags.DEFINE_float('sample', 1e-3, 'Subsampling rate.')
-flags.DEFINE_integer('window_size', 10, 'Num of words on the left or right side'
+flags.DEFINE_integer('window_size', 3, 'Num of words on the left or right side'
     ' of target word within a window.')
 
 flags.DEFINE_integer('hidden_size', 300, 'Length of word vector.')
@@ -50,13 +62,13 @@ flags.DEFINE_boolean('add_bias', True, 'Whether to add bias term to dotproduct '
 flags.DEFINE_integer('log_per_steps', 10000, 'Every `log_per_steps` steps to '
     ' log the value of loss to be minimized.')
 flags.DEFINE_list(
-    'filenames',  path_config.corpus_path, 'Names of comma-separated input text files.')
-flags.DEFINE_string('out_dir', path_config.output_path, 'Output directory.')
+    'filenames', None, 'Names of comma-separated input text files.')
+flags.DEFINE_string('out_dir', '/tmp/word2vec', 'Output directory.')
 
 FLAGS = flags.FLAGS
 
 
-def main(_):  
+def main(_):
   arch = FLAGS.arch
   algm = FLAGS.algm
   epochs = FLAGS.epochs
@@ -79,9 +91,6 @@ def main(_):
       max_vocab_size=max_vocab_size, min_count=min_count, sample=sample)
   tokenizer.build_vocab(filenames)
 
-
-  # TODO fix , sentences separated like [SPACE][DOT][SPACE]
-  # file must be list of sentences \n separated
   builder = Word2VecDatasetBuilder(tokenizer,
                                    arch=arch,
                                    algm=algm,
@@ -89,7 +98,6 @@ def main(_):
                                    batch_size=batch_size,
                                    window_size=window_size)
   dataset = builder.build_dataset(filenames)
-
   word2vec = Word2VecModel(tokenizer.unigram_counts,
                arch=arch,
                algm=algm,
@@ -107,9 +115,10 @@ def main(_):
 
   @tf.function(input_signature=train_step_signature)
   def train_step(inputs, labels, progress):
+
     loss = word2vec(inputs, labels)
-    gradients = tf.gradients(loss, word2vec.trainable_variables)
-  
+    gradients = tf.gradients(loss, word2vec.trainable_variables, unconnected_gradients='zero')
+
     learning_rate = tf.maximum(alpha * (1 - progress[0]) +
         min_alpha * progress[0], min_alpha)
 
@@ -133,10 +142,14 @@ def main(_):
 
     return loss, learning_rate
 
+
   average_loss = 0.
-  for step, (inputs, labels, progress) in enumerate(dataset):
-    loss, learning_rate = train_step(inputs, labels, progress)
-    average_loss += loss.numpy().mean()
+ # list_trpoints = []
+  # training su corpus completo
+  for step, (inputs, labels, progress, nsent) in enumerate(dataset):
+    loss, learning_rate = train_step(inputs, labels, progress) # vector of losses for each element of the set [(target,c1), (target,neg1), (target,neg2),...]
+
+    average_loss += loss.numpy().mean() # this is the mean loss per training instance [(target,c1), (target,neg1), (target,neg2),...], I add it to total avg loss
     if step % log_per_steps == 0:
       if step > 0:
         average_loss /= log_per_steps
@@ -144,16 +157,107 @@ def main(_):
             'learning_rate:', learning_rate.numpy())
       average_loss = 0.
 
+#    list_trpoints.append((inputs.ref(), labels.ref(), nsent.ref()))
+  print("Training completed")
+
+ # set_trpoints = set(list_trpoints)
+  # re-build dataset only with one epoch (each tuple (target, context_word) appears only once)
+  builder = Word2VecDatasetBuilder(tokenizer,
+                                     arch=arch,
+                                     algm=algm,
+                                     epochs=1,
+                                     batch_size=batch_size,
+                                     window_size=window_size)
+  dataset = builder.build_dataset(filenames)
+  print("Dataset re-built")
+# decido di calcolare la loss senza negative sampling, completa
+
+  # liste_termini_weat
+  S = ["science", "technology"]
+  T = ["art"]
+  A = ["man", "boy", "brother", "he", "him", "his"]
+  B = ["woman", "she", "her"]
+
+  list_index_weat = []
+  for word in S+T+A+B:
+      list_index_weat.append(tokenizer._vocab[word])
+
+  diz_gradients = {} # dictionary like {(inputs, labels, nsent): gradient}
+  hessian_diz = {} # dictionary like {inputs: hessian}
+
+  for step, (inputs, labels, progress, nsent) in enumerate(dataset):
+      if inputs.numpy()[0] in list_index_weat:
+
+
+  # DA SISTEMARE per rendere più efficiente
+  # devo calcolare total_expsum per ciascun target (solo parole WEAT)
+#  diz_expsum_input = {}
+
+  # forse questo potrebbe velocizzare
+ # keys = [elem[0] for elem in set_trpoints if tokenizer._table_words[elem[0].deref().numpy()[0]] in S+T+A+B]
+ # diz_expsum_input = {key: None for key in keys} # così posso aggiungere direttamente elementi senza dover cercare in tutta la lista di chiavi
+
+ # for tr_point in set_trpoints:
+#      inputs = tr_point[0].deref()
+#      labels = tr_point[1].deref()
+#      nsent = tr_point[2].deref()
+#      if inputs.numpy()[0] in list_index_weat:
+#          if inputs.ref() not in diz_expsum_input:
+#              diz_expsum_input[inputs.ref()] = word2vec.exp_sum(inputs)
+
+
+#  for step, (inputs, labels, progress, nsent) in enumerate(dataset): # forse si può rendere più efficiente ed evitare di iterare su tutto
+#    if inputs.numpy()[0] in list_index_weat:
+#        print("one of the weat words")
+#        if inputs.numpy()[0] not in diz_expsum_input:
+#            diz_expsum_input[inputs.numpy()[0]] = word2vec.exp_sum(inputs)
+
+#  print("Exponential sum computed")
+  vocab_len = word2vec._vocab_size
+  for step, (inputs, labels, progress, nsent) in enumerate(dataset):
+      if inputs.numpy()[0] in list_index_weat:
+          with strategy.scope():
+              with tf.GradientTape(persistent=True) as tape:
+                 # expsum = diz_expsum_input[inputs.numpy()[0]]
+                  loss = word2vec.normal_loss(inputs, labels, vocab_len)
+                  print(loss)
+                  tape.watch(loss)
+                  gradients = tape.gradient(loss, word2vec.trainable_variables, unconnected_gradients='zero')
+              jacobian = tape.batch_jacobian(gradients[0], word2vec.trainable_variables[0])
+            #  del tape
+
+          grad_loss = gradients[0]._values.numpy()[0]
+          hessian_loss = jacobian[inputs.numpy()[0]].numpy()
+          diz_key = (tokenizer._table_words[inputs.numpy()[0]], tokenizer._table_words[labels.numpy()[0]], str(nsent.numpy()[0]))
+          if diz_key not in diz_gradients:
+              diz_gradients[diz_key] = grad_loss
+          else:
+              diz_gradients[diz_key] += grad_loss
+
+          if tokenizer._table_words[inputs.numpy()[0]] not in hessian_diz:
+              hessian_diz[tokenizer._table_words[inputs.numpy()[0]]] = hessian_loss
+          else:
+              hessian_diz[tokenizer._table_words[inputs.numpy()[0]]] += hessian_loss
+
+  # Store data (serialize)
+  with open('dict_gradients.pickle', 'wb') as handle_grad:
+      pickle.dump(diz_gradients, handle_grad, protocol=pickle.HIGHEST_PROTOCOL)
+
+  with open('dict_hessians.pickle', 'wb') as handle_hes:
+      pickle.dump(hessian_diz, handle_hes, protocol=pickle.HIGHEST_PROTOCOL)
+
+  #print(hessian_diz)
   syn0_final = word2vec.weights[0].numpy()
-  np.save(os.path.join(out_dir, 'syn0_final'), syn0_final)
-  with tf.io.gfile.GFile(os.path.join(out_dir, 'vocab.txt'), 'w') as f:
+  np.save(os.path.join(FLAGS.out_dir, 'syn0_final'), syn0_final)
+  with tf.io.gfile.GFile(os.path.join(FLAGS.out_dir, 'vocab.txt'), 'w') as f:
     for w in tokenizer.table_words:
       f.write(w + '\n')
-  print('Word embeddings saved to', 
-      os.path.join(out_dir, 'syn0_final.npy'))
-  print('Vocabulary saved to', os.path.join(out_dir, 'vocab.txt'))
+  print('Word embeddings saved to',
+      os.path.join(FLAGS.out_dir, 'syn0_final.npy'))
+  print('Vocabulary saved to', os.path.join(FLAGS.out_dir, 'vocab.txt'))
 
 
 if __name__ == '__main__':
   flags.mark_flag_as_required('filenames')
+  # training and saving of useful elements
   app.run(main)
