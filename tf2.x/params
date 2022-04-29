@@ -1,0 +1,6 @@
+    --filenames=/content/nyt_articles_prime442.txt \
+    --out_dir= /content/ \
+    --epochs=5 \
+    --batch_size=1 \
+    --window_size=5 \
+    --min_alpha=0.001
