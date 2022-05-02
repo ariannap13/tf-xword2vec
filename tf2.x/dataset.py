@@ -276,7 +276,7 @@ class Word2VecDatasetBuilder(object):
         tf.data.Dataset.from_tensor_slices(tf.repeat([[i for i in range(nsent_singleepoch)]], repeats=self._epochs))))
     # dataset: [([int], float)]
     dataset = dataset.map(lambda indices, progress, nsent:
-        (subsample(indices, keep_probs), progress, nsent))
+        (subsample(indices, keep_probs, nsent), progress, nsent))
     # dataset: [([int], float)]
     dataset = dataset.filter(lambda indices, progress, nsent:
         tf.greater(tf.size(indices), 1))  # sentence must have at least 2 tokens
@@ -327,21 +327,22 @@ class Word2VecDatasetBuilder(object):
     return dataset
 
 
-def subsample(indices, keep_probs):
+def subsample(indices, keep_probs, nsent):
   """Filters out-of-vocabulary words and then applies subsampling on words in a
   sentence. Words with high frequencies have lower keep probs.
 
   Args:
     indices: rank-1 int tensor, the word indices within a sentence.
     keep_probs: rank-1 float tensor, the prob to drop the each vocabulary word.
-
+    nsent: integer, used as SEED for random uniform, garantees some level of stochasticity 
+          between sentences but also REPLIABILITY
   Returns:
     indices: rank-1 int tensor, the word indices within a sentence after
       subsampling.
   """
   indices = tf.boolean_mask(indices, tf.not_equal(indices, OOV_ID))
   keep_probs = tf.gather(keep_probs, indices)
-  randvars = tf.random.uniform(tf.shape(keep_probs), 0, 1)
+  randvars = tf.random.uniform(tf.shape(keep_probs), 0, 1, seed=nsent)
   indices = tf.boolean_mask(indices, tf.less(randvars, keep_probs))
   return indices
 
