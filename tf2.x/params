@@ -1,6 +1,6 @@
-    --filenames=/content/nyt_articles_prime442.txt \
-    --out_dir= /content/ \
+    --filenames=/content/drive/MyDrive/TESI/Papers/Brunet/code/nyt_articles_1k.txt \
+    --out_dir= /content/drive/MyDrive/TESI/Papers/Brunet/code/ \
     --epochs=5 \
     --batch_size=1 \
     --window_size=5 \
-    --min_alpha=0.001
+    --min_alpha=0.0245
