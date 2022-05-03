@@ -8,6 +8,7 @@ from dataset import Word2VecDatasetBuilder
 
 class Word2VecModel(tf.keras.Model):
   """Word2Vec model."""
+
   def __init__(self,
                unigram_counts,
                arch='skip_gram',
@@ -50,6 +51,7 @@ class Word2VecModel(tf.keras.Model):
     self._min_alpha = min_alpha
     self._add_bias = add_bias
     self._random_seed = random_seed
+    self._all_losses = {}
 
     self._input_size = (self._vocab_size if self._algm == 'negative_sampling'
                             else self._vocab_size - 1)
@@ -89,8 +91,7 @@ class Word2VecModel(tf.keras.Model):
       loss = self._hierarchical_softmax_loss(inputs, labels)
     return loss
 
-
-  def normal_loss(self, inputs, labels, vocab_len):
+  def normal_loss(self, inputs, labels, vocab_len, get_context=True):
     """Builds the loss.
 
     Args:
@@ -101,44 +102,119 @@ class Word2VecModel(tf.keras.Model):
     Returns:
       loss: float tensor of shape [batch_size, vocab_size].
     """
-    vocab = set(range(vocab_len))
+
+    losses = []
     _, syn1, biases = self.weights
 
-    contexts = []
-    for b_i in range(self._batch_size):
-        vocab_tmp = vocab.copy()
-        # remove target
-        vocab_tmp.remove(inputs[b_i].numpy())
-        contexts.append(tf.constant(list(vocab_tmp), shape=(1, vocab_len -1 )))
+    inputs_syn0 = self._get_inputs_syn0(inputs)  # [batch_size, hidden_size]
+    true_syn1 = tf.gather(syn1, labels)  # [batch_size, hidden_size]
 
-    context_mat = tf.concat(contexts, axis =0)
-    inputs_syn0 = self._get_inputs_syn0(inputs) # [batch_size, hidden_size]
-    true_syn1 = tf.gather(syn1, labels) # [batch_size, hidden_size]
-    context_syn1 = tf.gather(syn1, context_mat)
     # [batch_size]
     true_logits = tf.reduce_sum(tf.multiply(inputs_syn0, true_syn1), 1)
-    # [batch_size, negatives]
-    context_logits = tf.einsum('ijk,ikl->il', tf.expand_dims(inputs_syn0, 1),
-        tf.transpose(context_syn1, (0, 2, 1)))
-
-    if self._add_bias:
-      # [batch_size]
-      true_logits += tf.gather(biases, labels)
-      # [batch_size, negatives]
-      context_logits += tf.gather(biases, context_mat)
 
     # [batch_size]
     true_cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
         labels=tf.ones_like(true_logits), logits=true_logits)
-    # [batch_size, negatives]
-    context_cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
-        labels=tf.zeros_like(context_logits), logits=context_logits)
 
-    loss = tf.concat(
-        [tf.expand_dims(true_cross_entropy, 1), context_cross_entropy], 1)
+    losses.append(tf.expand_dims(true_cross_entropy, 1))
+
+    if (get_context):
+      # returns loss for every word in vocab
+      vocab = set(range(vocab_len))
+
+      contexts = []
+      for b_i in range(self._batch_size):
+          vocab_tmp = vocab.copy()
+          # remove target
+          vocab_tmp.remove(inputs[b_i].numpy())
+          contexts.append(tf.constant(
+              list(vocab_tmp), shape=(1, vocab_len - 1)))
+
+      context_mat = tf.concat(contexts, axis=0)
+      context_syn1 = tf.gather(syn1, context_mat)
+      # [batch_size, vocab_len -1]
+      context_logits = tf.einsum('ijk,ikl->il', tf.expand_dims(inputs_syn0, 1),
+          tf.transpose(context_syn1, (0, 2, 1)))
+      # [batch_size, vocab_len -1]
+      context_cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
+          labels=tf.zeros_like(context_logits), logits=context_logits)
+      losses.append(context_cross_entropy)
+
+    loss = tf.concat(losses, 1)
     return loss
 
+  
 
+  def normal_loss_opt(self, inputs, labels, vocab_len):
+    """Builds the loss.
+
+    Args:
+      vocab_len: int length of vocabolary
+
+    Returns:
+      loss: dictionary of every targets and his losses of real label
+      & losses of context label.
+    """
+    res = []
+    for b_i in range(self._batch_size):
+      
+      if (inputs[b_i].numpy() not in self._all_losses):
+        #already exists, return
+        #res.append(self._all_losses[inputs[b_i].numpy()])
+        # calcola e restituisce
+
+        # tensor of shape [1, vocab_length] made of vocab indexes
+        vocab = tf.constant(list(range(vocab_len)), shape=(1, vocab_len))
+
+        _, syn1, biases = self.weights
+
+        # calc real contexts of given target
+        inputs_syn0 = self._get_inputs_syn0(
+            tf.expand_dims(inputs[b_i], 0))  # [batch_size, hidden_size
+
+        # real
+        true_labels_syn1 = tf.gather(syn1, vocab)
+        # [batch_size, vocab_len]
+        true_labels_logits = tf.einsum('ijk,ikl->il', tf.expand_dims(inputs_syn0, 1),
+            tf.transpose(true_labels_syn1, (0, 2, 1)))
+        # [batch_size, vocab_len]
+        real_losses = tf.nn.sigmoid_cross_entropy_with_logits(
+            labels=tf.ones_like(true_labels_logits), logits=true_labels_logits)
+
+        # context
+        context_syn1 = tf.gather(syn1, vocab)
+        # [batch_size, vocab_len -1]
+        context_logits = tf.einsum('ijk,ikl->il', tf.expand_dims(inputs_syn0, 1),
+            tf.transpose(context_syn1, (0, 2, 1)))
+        # [batch_size, vocab_len -1]
+        context_losses = tf.nn.sigmoid_cross_entropy_with_logits(
+            labels=tf.zeros_like(context_logits), logits=context_logits)
+
+        self._all_losses[inputs[b_i].numpy()] = {
+          'real': real_losses,  # includes target itself
+          'context': context_losses
+        }
+      
+      #create concat tensor TRUE LABEL | ...OTHER CONTEXTS
+      res.append(tf.concat([
+        tf.expand_dims(
+          self._all_losses[inputs[b_i].numpy()]['real'][0, labels[b_i].numpy()],
+          0),
+        self._remove_index(
+          self._all_losses[inputs[b_i].numpy()]['context'][0], 
+          labels[b_i].numpy()
+          )
+        ], axis = 0))
+
+
+    return res
+  
+  def _remove_index(self, tensor, index, replace=False):
+    if replace:
+      return tf.concat([tensor[0:index], replace, tensor[index+1:len(tensor)]], axis=0)
+    return tf.concat([tensor[0:index], tensor[index+1:len(tensor)]], axis=0)
+  
+  
   def _negative_sampling_loss(self, inputs, labels):
     """Builds the loss for negative sampling.
 
