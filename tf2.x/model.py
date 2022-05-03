@@ -88,8 +88,8 @@ class Word2VecModel(tf.keras.Model):
     return loss
 
 
-  def normal_loss(self, inputs, labels, vocab_len):
-    """Builds the loss.
+  def _full_loss(self, inputs, labels, vocab_len):
+    """Builds the full loss.
 
     Args:
       inputs: int tensor of shape [batch_size] (skip_gram) or
@@ -105,30 +105,36 @@ class Word2VecModel(tf.keras.Model):
     contexts = []
     for b_i in range(self._batch_size):
         vocab_tmp = vocab.copy()
-        # remove target
-        vocab_tmp.remove(inputs[b_i].numpy())
-        contexts.append(tf.constant(list(vocab_tmp), shape=(1, vocab_len -1 )))
+        # remove target and label - problema si ha dal momento in cui target e label sono lo stesso termine: avremo vettori di loss di lunghezza diversa
+        vocab_tmp.remove(inputs[0].numpy())
+#        if inputs[b_i] != labels[b_i]: # se per sfiga mi capita sia come input che come label
+#            vocab_tmp.remove(labels[b_i].numpy())
+#            ntoremove = 2
+#        else:
+#            ntoremove = 1
+        vocab_tmp.remove(labels[0].numpy())
+        ntoremove = 2
+        contexts.append(tf.constant(list(vocab_tmp), shape=(1, vocab_len - ntoremove)))
 
     context_mat = tf.concat(contexts, axis =0)
-    inputs_syn0 = self._get_inputs_syn0(inputs) # [batch_size, hidden_size]
-    true_syn1 = tf.gather(syn1, labels) # [batch_size, hidden_size]
+    inputs_syn0 = self._get_inputs_syn0(inputs) 
+    true_syn1 = tf.gather(syn1, labels)
     context_syn1 = tf.gather(syn1, context_mat)
-    # [batch_size]
+
     true_logits = tf.reduce_sum(tf.multiply(inputs_syn0, true_syn1), 1)
-    # [batch_size, negatives]
+
     context_logits = tf.einsum('ijk,ikl->il', tf.expand_dims(inputs_syn0, 1),
         tf.transpose(context_syn1, (0, 2, 1)))
 
     if self._add_bias:
-      # [batch_size]
+
       true_logits += tf.gather(biases, labels)
-      # [batch_size, negatives]
+
       context_logits += tf.gather(biases, context_mat)
 
-    # [batch_size]
     true_cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
         labels=tf.ones_like(true_logits), logits=true_logits)
-    # [batch_size, negatives]
+
     context_cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(
         labels=tf.zeros_like(context_logits), logits=context_logits)
 

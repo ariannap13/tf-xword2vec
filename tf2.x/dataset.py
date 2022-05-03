@@ -259,21 +259,15 @@ class Word2VecDatasetBuilder(object):
             for line in f:
               yield self._tokenizer.encode(line)
 
-    def create_diz():
-      for _ in range(self._epochs):
-        for fn in filenames:
-          for index in range(len(fn)):
-            yield index
-
     nsent_singleepoch = sum([len(list(tf.io.gfile.GFile(fn)))
         for fn in filenames])
-
 
     # dataset: [([int], float)]
     dataset = tf.data.Dataset.zip((
         tf.data.Dataset.from_generator(generator_fn, tf.int64, [None]),
         tf.data.Dataset.from_tensor_slices(tf.range(num_sents) / num_sents),
-        tf.data.Dataset.from_tensor_slices(tf.repeat([[i for i in range(nsent_singleepoch)]], repeats=self._epochs))))
+        tf.data.Dataset.from_tensor_slices(tf.tile(tf.constant([i for i in range(nsent_singleepoch)]), multiples = [self._epochs]))))
+        #tf.data.Dataset.from_tensor_slices(tf.repeat([[i for i in range(nsent_singleepoch)]], repeats=self._epochs))))
     # dataset: [([int], float)]
     dataset = dataset.map(lambda indices, progress, nsent:
         (subsample(indices, keep_probs), progress, nsent))
@@ -341,7 +335,8 @@ def subsample(indices, keep_probs):
   """
   indices = tf.boolean_mask(indices, tf.not_equal(indices, OOV_ID))
   keep_probs = tf.gather(keep_probs, indices)
-  randvars = tf.random.uniform(tf.shape(keep_probs), 0, 1)
+  tf.random.set_seed(5)
+  randvars = tf.random.uniform(tf.shape(keep_probs), 0, 1, seed=10)
   indices = tf.boolean_mask(indices, tf.less(randvars, keep_probs))
   return indices
 
@@ -393,7 +388,8 @@ def generate_instances(
 
     `index` is the index of the target word in `indices`.
     """
-    reduced_size = tf.random.uniform([], maxval=window_size, dtype='int32')
+    tf.random.set_seed(5)
+    reduced_size = tf.random.uniform([], maxval=window_size, dtype='int32', seed=10)
     left = tf.range(tf.maximum(index - window_size + reduced_size, 0), index)
     right = tf.range(index + 1,
         tf.minimum(index + 1 + window_size - reduced_size, tf.size(indices)))
