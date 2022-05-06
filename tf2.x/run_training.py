@@ -216,8 +216,9 @@ def main(_):
               #print(gradients[0])
               #print(jacobian[inputs.numpy()[0]])
               grad_loss = gradients[0]._values.numpy()[0]
-              # già direttamente salvo la matrice invertita con
-              hessian_loss = tf.linalg.inv(jacobian[inputs.numpy()[0]]).numpy()
+              # non posso già direttamente salvo la matrice invertita perché inversa di somma di matrici (aggregazione per target)
+              # non è uguale a somma di matrici inverse
+              hessian_loss = jacobian[inputs.numpy()[0]].numpy()
               diz_key = (tokenizer._table_words[inputs.numpy()[0]], tokenizer._table_words[labels.numpy()[0]], str(nsent.numpy()[0]))
 
               if diz_key not in diz_gradients:
