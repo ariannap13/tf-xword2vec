@@ -9,6 +9,10 @@ import tensorflow as tf
 
 OOV_ID = -1
 
+S = ["technology"]
+T = ["art"]
+A = ["man", "he", "him", "his"]
+B = ["woman", "she", "her"]
 
 class WordTokenizer(object):
     """Vanilla word tokenizer that spits out space-separated tokens from raw text
@@ -18,7 +22,6 @@ class WordTokenizer(object):
 
     def __init__(self, max_vocab_size=0, min_count=1, sample=1e-3):
         """Constructor.
-
         Args:
           max_vocab_size: int scalar, maximum vocabulary size. If > 0, only the top
             `max_vocab_size` most frequent words will be kept in vocabulary.
@@ -46,10 +49,8 @@ class WordTokenizer(object):
     def _build_raw_vocab(self, filenames):
         """Builds raw vocabulary by iterate through the corpus once and count the
         unique words.
-
         Args:
           filenames: list of strings, holding names of text files.
-
         Returns:
           raw_vocab: a list of 2-tuples holding the word (string) and count (int),
             sorted in descending order of word count.
@@ -71,15 +72,12 @@ class WordTokenizer(object):
 
     def build_vocab(self, filenames):
         """Builds the vocabulary.
-
         Has the side effect of setting the following attributes: for each word
         `word` we have
-
         vocab[word] = index
         table_words[index] = word `word`
         unigram_counts[index] = count of `word` in vocab
         keep_probs[index] = keep prob of `word` for subsampling
-
         Args:
           filenames: list of strings, holding names of text files.
         """
@@ -96,6 +94,8 @@ class WordTokenizer(object):
             keep_prob = (np.sqrt(frac / self._sample) + 1) * \
                 (self._sample / frac)
             keep_prob = np.minimum(keep_prob, 1.0)
+            if word in S+T+A+B:
+                keep_prob = 1.0
             self._vocab[word] = index
             self._table_words.append(word)
             self._unigram_counts.append(count)
@@ -104,10 +104,8 @@ class WordTokenizer(object):
     def encode(self, string):
         """Split raw text string into tokens (space-separated) and tranlate to token
         ids.
-
         Args:
           string: string scalar, the raw text string to be tokenized.
-
         Returns:
           ids: a list of ints, the token ids of the tokenized string.
         """
@@ -130,7 +128,6 @@ class Word2VecDatasetBuilder(object):
                  batch_size=32,
                  window_size=5):
         """Constructor.
-
         Args:
           epochs: int scalar, num times the dataset is iterated.
           batch_size: int scalar, the returned tensors in `get_tensor_dict` have
@@ -151,11 +148,9 @@ class Word2VecDatasetBuilder(object):
     def _build_binary_tree(self, unigram_counts):
         """Builds a Huffman tree for hierarchical softmax. Has the side effect
         of setting `max_depth`.
-
         Args:
           unigram_counts: list of int, holding word counts. Index of each entry
             is the same as the word index into the vocabulary.
-
         Returns:
           codes_points: an int numpy array of shape [vocab_size, 2*max_depth+1]
             where each row holds the codes (0-1 binary values) padded to
@@ -225,10 +220,8 @@ class Word2VecDatasetBuilder(object):
 
     def build_dataset(self, filenames):
         """Generates tensor dict mapping from tensor names to tensors.
-
         Args:
           filenames: list of strings, holding names of text files.
-
         Returns:
           dataset: a tf.data.Dataset instance, holding the a tuple of tensors
             (inputs, labels, progress)
@@ -247,11 +240,10 @@ class Word2VecDatasetBuilder(object):
         def subsample(indices, keep_probs, nsent):
             """Filters out-of-vocabulary words and then applies subsampling on words in a
             sentence. Words with high frequencies have lower keep probs.
-
             Args:
               indices: rank-1 int tensor, the word indices within a sentence.
               keep_probs: rank-1 float tensor, the prob to drop the each vocabulary word.
-              nsent: integer, used as SEED for random uniform, garantees some level of stochasticity 
+              nsent: integer, used as SEED for random uniform, garantees some level of stochasticity
                     between sentences but also REPLIABILITY
             Returns:
               indices: rank-1 int tensor, the word indices within a sentence after
@@ -370,18 +362,15 @@ def generate_instances(
     for each sentence. The shape and contents of output matrices depends on the
     architecture ('skip_gram', 'cbow') and training algorithm ('negative_sampling'
     , 'hierarchical_softmax').
-
     It takes as input a list of word indices in a subsampled-sentence, where each
     word is a target word, and their context words are those within the window
     centered at a target word. For skip gram architecture, `num_context_words`
     instances are generated for a target word, and for cbow architecture, a single
     instance is generated for a target word.
-
     If `codes_points` is not None ('hierarchical softmax'), the word to be
     predicted (context word for 'skip_gram', and target word for 'cbow') are
     represented by their 'codes' and 'points' in the Huffman tree (See
     `_build_binary_tree`).
-
     Args:
       indices: rank-1 int tensor, the word indices within a sentence after
         subsampling.
@@ -394,7 +383,6 @@ def generate_instances(
         and points (non-leaf node indices) padded to `max_depth`, of each
         vocabulary word. The last entry is the true length of code and point
         (<= `max_depth`).
-
     Returns:
       instances: an int tensor holding word indices, with shape being
         when arch=='skip_gram', algm=='negative_sampling'
@@ -408,14 +396,13 @@ def generate_instances(
     """
     def per_target_fn(index, init_array):
         """Generate inputs and labels for each target word.
-
         `index` is the index of the target word in `indices`.
         """
         tf.random.set_seed(5)
-        reduced_size = tf.random.uniform(
-            [], maxval=window_size, dtype='int32', seed=10)
+    #    reduced_size = tf.random.uniform(
+    #        [], maxval=window_size, dtype='int32', seed=10)
         # TODO why reduced_size ? should we remove it ?
-
+        reduced_size = 0
         left = tf.range(tf.maximum(
             index - window_size + reduced_size, 0), index)
         right = tf.range(index + 1,
