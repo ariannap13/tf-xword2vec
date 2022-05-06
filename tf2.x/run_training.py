@@ -11,6 +11,7 @@ training algorithm
   - negative_sampling
   - hierarchical_softmax
 """
+
 import os
 
 import tensorflow as tf
@@ -24,18 +25,11 @@ from model import Word2VecModel
 from word_vectors import WordVectors
 
 import utils
-
 import pickle
 
 import warnings
 warnings.filterwarnings('ignore')
 
-# resolver = tf.distribute.cluster_resolver.TPUClusterResolver(tpu='')
-# tf.config.experimental_connect_to_cluster(resolver)
-# This is the TPU initialization code that has to be at the beginning.
-# tf.tpu.experimental.initialize_tpu_system(resolver)
-# print("All devices: ", tf.config.list_logical_devices('TPU'))
-# strategy = tf.distribute.TPUStrategy(resolver)
 
 # allow GPU
 device_name = tf.test.gpu_device_name()
@@ -65,7 +59,7 @@ flags.DEFINE_integer('negatives', 5, 'Num of negative words to sample.')
 flags.DEFINE_float('power', 0.75, 'Distortion for negative sampling.')
 flags.DEFINE_float('alpha', 0.025, 'Initial learning rate.')
 flags.DEFINE_float('min_alpha', 0.0001, 'Final learning rate.')
-flags.DEFINE_boolean('add_bias', True, 'Whether to add bias term to dotproduct '
+flags.DEFINE_boolean('add_bias', False, 'Whether to add bias term to dotproduct '
     'between syn0 and syn1 vectors.')
 
 flags.DEFINE_integer('log_per_steps', 10000, 'Every `log_per_steps` steps to '
@@ -99,6 +93,8 @@ def main(_):
   tokenizer = WordTokenizer(
       max_vocab_size=max_vocab_size, min_count=min_count, sample=sample)
   tokenizer.build_vocab(filenames)
+
+  #print(len(tokenizer._vocab))
 
   builder = Word2VecDatasetBuilder(tokenizer,
                                    arch=arch,
@@ -153,14 +149,10 @@ def main(_):
 
 
   average_loss = 0.
- # list_trpoints = []
-  # training su corpus completo
   for step, (inputs, labels, progress, nsent) in enumerate(dataset):
-    if inputs != labels:
-        #print(tokenizer._table_words[inputs.numpy()[0]], tokenizer._table_words[labels.numpy()[0]], nsent.numpy()[0])
-        with tf.device('/device:GPU:0'): # forse da cambiare con with  with tf.device('/cpu:0'): per tornare alla velocità che aveva con la cpu ????
+        #with tf.device('/device:GPU:0'): # forse da cambiare con  with tf.device('/cpu:0'): per tornare alla velocità che aveva con la cpu ????
+        with tf.device('/cpu:0'):
             loss, learning_rate = train_step(inputs, labels, progress) # vector of losses for each element of the set [(target,c1), (target,neg1), (target,neg2),...]
-
         average_loss += loss.numpy().mean() # this is the mean loss per training instance [(target,c1), (target,neg1), (target,neg2),...], I add it to total avg loss
         if step % log_per_steps == 0:
             if step > 0:
@@ -169,16 +161,14 @@ def main(_):
             'learning_rate:', learning_rate.numpy())
             average_loss = 0.
 
-#    list_trpoints.append((inputs.ref(), labels.ref(), nsent.ref()))
   print("Training completed")
 
- # set_trpoints = set(list_trpoints)
   # re-build dataset only with one epoch (each tuple (target, context_word) appears only once)
   builder = Word2VecDatasetBuilder(tokenizer,
                                      arch=arch,
                                      algm=algm,
                                      epochs=1, # un'unica iterazione su totale frasi
-                                     batch_size=1, # un'unico esempio trattato alla volta
+                                     batch_size=batch_size, # un'unico esempio trattato alla volta
                                      window_size=window_size)
   dataset = builder.build_dataset(filenames)
   print("Dataset re-built")
@@ -187,7 +177,7 @@ def main(_):
   # liste_termini_weat
   S = ["technology"]
   T = ["art"]
-  A = ["man", "boy", "brother", "he", "him", "his"]
+  A = ["man", "he", "him", "his"]
   B = ["woman", "she", "her"]
 
   list_index_weat = []
@@ -200,29 +190,33 @@ def main(_):
 
   tot_count = 0
   for step, (inputs, labels, progress, nsent) in enumerate(dataset): # forse si può rendere più efficiente ed evitare di iterare su tutto
-    if inputs.numpy()[0] in list_index_weat:
-        if inputs != labels:
-            tot_count+=1
+    if inputs.numpy()[0] in list_index_weat: # to change if batch > 1
+        tot_count+=1
   print("Tot. number of inputs to consider: ", tot_count)
 
   vocab_len = word2vec._vocab_size
+  print(vocab_len)
 
   i=0
   for step, (inputs, labels, progress, nsent) in enumerate(dataset):
-      if inputs.numpy()[0] in list_index_weat:
-          if inputs != labels:
-              i+=1
-              with tf.device('/device:GPU:0'):
-                  with tf.GradientTape(persistent=True) as tape:
-                      loss = word2vec._full_loss(inputs, labels, vocab_len)
-                      tape.watch(loss)
-                      gradients = tape.gradient(loss, word2vec.trainable_variables, unconnected_gradients='zero')
-                  jacobian = tape.batch_jacobian(gradients[0], word2vec.trainable_variables[0])
-              print("Progress: ", i/tot_count, "Number: ", i)
+        if inputs.numpy()[0] in list_index_weat:
+            i+=1
+            with tf.device('/device:GPU:0'):
+              #print(word2vec.weights[0].numpy())
+              #print(tokenizer._table_words[inputs.numpy()[0]], tokenizer._table_words[labels.numpy()[0]], str(nsent.numpy()[0]))
+              with tf.GradientTape(persistent=True) as tape:
+                  loss = word2vec._full_loss(inputs, labels, vocab_len)
+                  #loss = word2vec._true_loss(inputs, labels)
+                  tape.watch(loss)
+                  #print(loss)
+                  gradients = tape.gradient(loss, word2vec.trainable_variables, unconnected_gradients='zero')
+              jacobian = tape.batch_jacobian(gradients[0], word2vec.trainable_variables[0])
+              #print("Progress: ", i/tot_count, "Number: ", i)
 
+              #print(gradients[0])
+              #print(jacobian[inputs.numpy()[0]])
               grad_loss = gradients[0]._values.numpy()[0]
-              #hessian_loss = jacobian[inputs.numpy()[0]].numpy()
-              # potrei già direttamente salvare la matrice invertita con
+              # già direttamente salvo la matrice invertita con
               hessian_loss = tf.linalg.inv(jacobian[inputs.numpy()[0]]).numpy()
               diz_key = (tokenizer._table_words[inputs.numpy()[0]], tokenizer._table_words[labels.numpy()[0]], str(nsent.numpy()[0]))
 
@@ -243,7 +237,6 @@ def main(_):
   with open(os.path.join(FLAGS.out_dir, 'dict_hessians.pickle'), 'wb') as handle_hes:
       pickle.dump(hessian_diz, handle_hes, protocol=pickle.HIGHEST_PROTOCOL)
 
-  #print(hessian_diz)
   syn0_final = word2vec.weights[0].numpy()
   np.save(os.path.join(FLAGS.out_dir, 'syn0_final'), syn0_final)
   with tf.io.gfile.GFile(os.path.join(FLAGS.out_dir, 'vocab.txt'), 'w') as f:
@@ -256,5 +249,4 @@ def main(_):
 
 if __name__ == '__main__':
   flags.mark_flag_as_required('filenames')
-  # training and saving of useful elements
   app.run(main)
