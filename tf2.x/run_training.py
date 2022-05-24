@@ -120,7 +120,7 @@ def main(_):
   def train_step(inputs, labels, progress, step):
 
     with tf.GradientTape(persistent=True) as tape:
-        loss = word2vec(inputs, labels, step) # use step as random seed for negative sampling - different for each training point but reproducible
+        loss = word2vec(inputs, labels, step, word2vec._batch_size, word2vec._unigram_counts) # use step as random seed for negative sampling - different for each training point but reproducible
         tape.watch(loss)
         gradients = tape.gradient(loss, word2vec.trainable_variables, unconnected_gradients='zero')
 
@@ -209,7 +209,7 @@ def main(_):
                 list_losses = []
                 for count in range(num_sampled):
                     random_seed = step+num_sampled+count # in order to change the seed for each training instance, number of sets and set
-                    loss = word2vec._negative_sampling_loss_post_training(inputs, labels, random_seed, tokenizer._counts_freqwords)
+                    loss = word2vec._negative_sampling_loss(inputs, labels, random_seed, batch_size = 1, unigram_counts = tokenizer._counts_freqwords)
                     list_losses.append(loss)
                 print("Avg. loss: ", np.array(list_losses).mean())
 
