@@ -37,6 +37,7 @@ class WordTokenizer(object):
         self._table_words = None
         self._unigram_counts = None
         self._keep_probs = None
+        self._counts_freqwords = None
 
     @property
     def unigram_counts(self):
@@ -70,6 +71,7 @@ class WordTokenizer(object):
             raw_vocab = raw_vocab[:self._max_vocab_size]
         return raw_vocab
 
+
     def build_vocab(self, filenames):
         """Builds the vocabulary.
         Has the side effect of setting the following attributes: for each word
@@ -89,8 +91,10 @@ class WordTokenizer(object):
         self._table_words = []
         self._unigram_counts = []
         self._keep_probs = []
+        frac_list = []
         for index, (word, count) in enumerate(raw_vocab):
             frac = count / float(self._corpus_size)
+            frac_list.append(frac)
             keep_prob = (np.sqrt(frac / self._sample) + 1) * \
                 (self._sample / frac)
             keep_prob = np.minimum(keep_prob, 1.0)
@@ -100,6 +104,11 @@ class WordTokenizer(object):
             self._table_words.append(word)
             self._unigram_counts.append(count)
             self._keep_probs.append(keep_prob)
+
+        # create list of counts for most frequent words
+        perc = np.percentile(np.array(frac_list), 25)
+        index_freqword = np.argwhere(np.array(frac_list) > perc)
+        self._counts_freqwords = [self._unigram_counts[id] if id in index_freqword else 0 for id in range(len(self._unigram_counts))] # count of 0 for non freq words
 
     def encode(self, string):
         """Split raw text string into tokens (space-separated) and tranlate to token
@@ -304,6 +313,8 @@ class Word2VecDatasetBuilder(object):
         nnsent = np.tile(
             [i for i in range(nsent_singleepoch)], reps=[self._epochs])
         # dataset: [([int], float)]
+
+        """For now, I don't consider the subsampling most frequent words, given the small corpus"""
         dataset = dataset.map(lambda indices, progress, nsent:
                               (subsample(indices, keep_probs, nnsent), progress, nsent))
         # dataset: [([int], float)]
@@ -398,7 +409,7 @@ def generate_instances(
         """Generate inputs and labels for each target word.
         `index` is the index of the target word in `indices`.
         """
-        tf.random.set_seed(5)
+    #    tf.random.set_seed(5)
     #    reduced_size = tf.random.uniform(
     #        [], maxval=window_size, dtype='int32', seed=10)
         # TODO why reduced_size ? should we remove it ?

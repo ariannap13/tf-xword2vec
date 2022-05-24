@@ -31,7 +31,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-# allow GPU
+#allow GPU
 device_name = tf.test.gpu_device_name()
 if device_name != '/device:GPU:0':
   print(
@@ -94,8 +94,6 @@ def main(_):
       max_vocab_size=max_vocab_size, min_count=min_count, sample=sample)
   tokenizer.build_vocab(filenames)
 
-  #print(len(tokenizer._vocab))
-
   builder = Word2VecDatasetBuilder(tokenizer,
                                    arch=arch,
                                    algm=algm,
@@ -118,11 +116,13 @@ def main(_):
       arch, algm, batch_size, window_size, builder._max_depth)
   optimizer = tf.keras.optimizers.SGD(1.0)
 
-  @tf.function(input_signature=train_step_signature)
-  def train_step(inputs, labels, progress):
+ # @tf.function(input_signature=train_step_signature)
+  def train_step(inputs, labels, progress, step):
 
-    loss = word2vec(inputs, labels)
-    gradients = tf.gradients(loss, word2vec.trainable_variables, unconnected_gradients='zero')
+    with tf.GradientTape(persistent=True) as tape:
+        loss = word2vec(inputs, labels, step) # use step as random seed for negative sampling - different for each training point but reproducible
+        tape.watch(loss)
+        gradients = tape.gradient(loss, word2vec.trainable_variables, unconnected_gradients='zero')
 
     learning_rate = tf.maximum(alpha * (1 - progress[0]) +
         min_alpha * progress[0], min_alpha)
@@ -151,8 +151,8 @@ def main(_):
   average_loss = 0.
   for step, (inputs, labels, progress, nsent) in enumerate(dataset):
         #with tf.device('/device:GPU:0'): # forse da cambiare con  with tf.device('/cpu:0'): per tornare alla velocità che aveva con la cpu ????
-        with tf.device('/cpu:0'):
-            loss, learning_rate = train_step(inputs, labels, progress) # vector of losses for each element of the set [(target,c1), (target,neg1), (target,neg2),...]
+        with tf.device('/device:GPU:0'):
+            loss, learning_rate = train_step(inputs, labels, progress, step) # vector of losses for each element of the set [(target,c1), (target,neg1), (target,neg2),...]
         average_loss += loss.numpy().mean() # this is the mean loss per training instance [(target,c1), (target,neg1), (target,neg2),...], I add it to total avg loss
         if step % log_per_steps == 0:
             if step > 0:
@@ -168,7 +168,7 @@ def main(_):
                                      arch=arch,
                                      algm=algm,
                                      epochs=1, # un'unica iterazione su totale frasi
-                                     batch_size=batch_size, # un'unico esempio trattato alla volta
+                                     batch_size=1, # un'unico esempio trattato alla volta
                                      window_size=window_size)
   dataset = builder.build_dataset(filenames)
   print("Dataset re-built")
@@ -201,35 +201,41 @@ def main(_):
   for step, (inputs, labels, progress, nsent) in enumerate(dataset):
         if inputs.numpy()[0] in list_index_weat:
             i+=1
-            with tf.device('/device:GPU:0'):
-              #print(word2vec.weights[0].numpy())
-              #print(tokenizer._table_words[inputs.numpy()[0]], tokenizer._table_words[labels.numpy()[0]], str(nsent.numpy()[0]))
-              with tf.GradientTape(persistent=True) as tape:
-                  loss = word2vec._full_loss(inputs, labels, vocab_len)
+
+            # prova con diverso numero di set di negative samples per vedere se funziona la creazione del gruppo di k most freq words
+            num_to_sample = [5, 10, 20, 30, 50]
+            for num_sampled in num_to_sample:
+                print("Number of neg. samples sets: ", num_sampled)
+                list_losses = []
+                for count in range(num_sampled):
+                    random_seed = step+num_sampled+count # in order to change the seed for each training instance, number of sets and set
+                    loss = word2vec._negative_sampling_loss_post_training(inputs, labels, random_seed, tokenizer._counts_freqwords)
+                    list_losses.append(loss)
+                print("Avg. loss: ", np.array(list_losses).mean())
+
+
+            with tf.GradientTape(persistent=True) as tape:
+                loss = word2vec._full_loss(inputs, labels, vocab_len)
                   #loss = word2vec._true_loss(inputs, labels)
-                  tape.watch(loss)
-                  #print(loss)
-                  gradients = tape.gradient(loss, word2vec.trainable_variables, unconnected_gradients='zero')
-              jacobian = tape.batch_jacobian(gradients[0], word2vec.trainable_variables[0])
-              #print("Progress: ", i/tot_count, "Number: ", i)
+                tape.watch(loss)
+                gradients = tape.gradient(loss, word2vec.trainable_variables, unconnected_gradients='zero')
+            jacobian = tape.batch_jacobian(gradients[0], word2vec.trainable_variables[0])
 
-              #print(gradients[0])
-              #print(jacobian[inputs.numpy()[0]])
-              grad_loss = gradients[0]._values.numpy()[0]
-              # non posso già direttamente salvo la matrice invertita perché inversa di somma di matrici (aggregazione per target)
-              # non è uguale a somma di matrici inverse
-              hessian_loss = jacobian[inputs.numpy()[0]].numpy()
-              diz_key = (tokenizer._table_words[inputs.numpy()[0]], tokenizer._table_words[labels.numpy()[0]], str(nsent.numpy()[0]))
+            grad_loss = gradients[0]._values.numpy()[0]
+            # non posso già direttamente salvo la matrice invertita perché inversa di somma di matrici (aggregazione per target)
+            # non è uguale a somma di matrici inverse
+            hessian_loss = jacobian[inputs.numpy()[0]].numpy()
+            diz_key = (tokenizer._table_words[inputs.numpy()[0]], tokenizer._table_words[labels.numpy()[0]], str(nsent.numpy()[0]))
 
-              if diz_key not in diz_gradients:
-                  diz_gradients[diz_key] = grad_loss.copy()
-              else:
-                  diz_gradients[diz_key] += grad_loss.copy()
+            if diz_key not in diz_gradients:
+                diz_gradients[diz_key] = grad_loss.copy()
+            else:
+                diz_gradients[diz_key] += grad_loss.copy()
 
-              if tokenizer._table_words[inputs.numpy()[0]] not in hessian_diz:
-                  hessian_diz[tokenizer._table_words[inputs.numpy()[0]]] = hessian_loss.copy()
-              else:
-                  hessian_diz[tokenizer._table_words[inputs.numpy()[0]]] += hessian_loss.copy()
+            if tokenizer._table_words[inputs.numpy()[0]] not in hessian_diz:
+                hessian_diz[tokenizer._table_words[inputs.numpy()[0]]] = hessian_loss.copy()
+            else:
+                hessian_diz[tokenizer._table_words[inputs.numpy()[0]]] += hessian_loss.copy()
 
   # Store data (serialize)
   with open(os.path.join(FLAGS.out_dir, 'dict_gradients.pickle'), 'wb') as handle_grad:
