@@ -72,7 +72,7 @@ class Word2VecModel(tf.keras.Model):
                     shape=[self._input_size],
                     initializer=tf.keras.initializers.Zeros())
 
-  def call(self, inputs, labels, random_seed, batch_size, unigram_counts, weights):
+  def call(self, inputs, labels, random_seed=None, batch_size=None, unigram_counts=None, negatives=None):
     """Runs the forward pass to compute loss.
 
     Args:
@@ -86,13 +86,13 @@ class Word2VecModel(tf.keras.Model):
       loss: float tensor, cross entropy loss.
     """
     if self._algm == 'negative_sampling':
-      loss = self._negative_sampling_loss(inputs, labels, random_seed, batch_size = self._batch_size, unigram_counts=self._unigram_counts, weights=weights)
+      loss = self._negative_sampling_loss(inputs, labels, random_seed, batch_size, unigram_counts, negatives)
     elif self._algm == 'hierarchical_softmax':
-      loss = self._hierarchical_softmax_loss(inputs, labels, weights = weights)
+      loss = self._hierarchical_softmax_loss(inputs, labels)
     return loss
 
 
-  def _false_loss(self, inputs, labels, vocab_len, weights=None):
+  def _false_loss(self, inputs, labels, vocab_len):
     """Builds the false loss. For every vocab, even for the true context.
     The batch_size is forced as 1 since we are post-training.
 
@@ -105,14 +105,11 @@ class Word2VecModel(tf.keras.Model):
       loss: float tensor of shape [batch_size, vocab_size].
     """
     vocab = set(range(vocab_len))
-    if weights:
-      _ , syn1 = weights
-    else:
-      _, syn1, biases = self.weights
+    _, syn1, biases = self.weights
 
     context_mat = tf.constant(list(vocab), shape=(1, vocab_len))
 
-    inputs_syn0 = self._get_inputs_syn0(inputs, weights)
+    inputs_syn0 = self._get_inputs_syn0(inputs)
 
     context_syn1 = tf.gather(syn1, context_mat)
 
@@ -129,7 +126,7 @@ class Word2VecModel(tf.keras.Model):
     return context_cross_entropy
 
 
-  def _full_loss(self, inputs, labels, vocab_len, weights=None):
+  def _full_loss(self, inputs, labels, vocab_len):
     """Builds the full loss. The batch_size is forced as 1 since we are post-training.
 
     Args:
@@ -141,11 +138,7 @@ class Word2VecModel(tf.keras.Model):
       loss: float tensor of shape [batch_size, vocab_size].
     """
     vocab = set(range(vocab_len))
-
-    if weights:
-      _, syn1 = weights
-    else:
-      _, syn1, biases = self.weights
+    _, syn1, biases = self.weights
 
     contexts = []
     for b_i in range(1): # 1 is batch_size
@@ -156,7 +149,7 @@ class Word2VecModel(tf.keras.Model):
     #context_mat = tf.reshape(contexts, [self._batch_size, vocab_len])
     context_mat = tf.concat(contexts, axis =0)
     context_mat = tf.reshape(context_mat, [1, vocab_len-1])
-    inputs_syn0 = self._get_inputs_syn0(inputs, weights)
+    inputs_syn0 = self._get_inputs_syn0(inputs)
     true_syn1 = tf.gather(syn1, labels)
     context_syn1 = tf.gather(syn1, context_mat)
 
@@ -213,7 +206,7 @@ class Word2VecModel(tf.keras.Model):
     return tf.concat([tensor[0:index], tensor[index+1:len(tensor)]], axis=0)
 
 
-  def _negative_sampling_loss(self, inputs, labels, random_seed, batch_size, unigram_counts, weights):
+  def _negative_sampling_loss(self, inputs, labels, random_seed, batch_size, unigram_counts, negatives):
     """Builds the loss for negative sampling.
 
     Args:
@@ -225,15 +218,12 @@ class Word2VecModel(tf.keras.Model):
     Returns:
       loss: float tensor of shape [batch_size, negatives + 1].
     """
-    if weights:
-      _, syn1 = weights
-    else:
-      _, syn1, biases = self.weights
+    _, syn1, biases = self.weights
 
     sampled_values = tf.random.fixed_unigram_candidate_sampler(
         true_classes=tf.expand_dims(labels, 1),
         num_true=1,
-        num_sampled=batch_size*self._negatives,
+        num_sampled=batch_size*negatives,
         unique=True,
         range_max=len(unigram_counts),
         distortion=self._power,
@@ -241,8 +231,8 @@ class Word2VecModel(tf.keras.Model):
         seed=random_seed)
 
     sampled = sampled_values.sampled_candidates
-    sampled_mat = tf.reshape(sampled, [batch_size, self._negatives])
-    inputs_syn0 = self._get_inputs_syn0(inputs, weights) # [batch_size, hidden_size]
+    sampled_mat = tf.reshape(sampled, [batch_size, negatives])
+    inputs_syn0 = self._get_inputs_syn0(inputs) # [batch_size, hidden_size]
     true_syn1 = tf.gather(syn1, labels) # [batch_size, hidden_size]
     # [batch_size, negatives, hidden_size]
     sampled_syn1 = tf.gather(syn1, sampled_mat)
@@ -270,7 +260,7 @@ class Word2VecModel(tf.keras.Model):
     return loss
 
 
-  def _hierarchical_softmax_loss(self, inputs, labels, weights):
+  def _hierarchical_softmax_loss(self, inputs, labels):
     """Builds the loss for hierarchical softmax.
 
     Args:
@@ -281,12 +271,9 @@ class Word2VecModel(tf.keras.Model):
     Returns:
       loss: float tensor of shape [sum_of_code_len]
     """
-    if weights:
-      _, syn1 = weights
-    else:
-      _, syn1, biases = self.weights
+    _, syn1, biases = self.weights
 
-    inputs_syn0_list = tf.unstack(self._get_inputs_syn0(inputs, weights))
+    inputs_syn0_list = tf.unstack(self._get_inputs_syn0(inputs))
     codes_points_list = tf.unstack(labels)
     max_depth = (labels.shape.as_list()[1] - 1) // 2
     loss = []
@@ -308,7 +295,7 @@ class Word2VecModel(tf.keras.Model):
     loss = tf.concat(loss, axis=0)
     return loss
 
-  def _get_inputs_syn0(self, inputs, weights=None):
+  def _get_inputs_syn0(self, inputs):
     """Builds the activations of hidden layer given input words embeddings
     `syn0` and input word indices.
 
@@ -320,10 +307,7 @@ class Word2VecModel(tf.keras.Model):
       inputs_syn0: [batch_size, hidden_size]
     """
     # syn0: [vocab_size, hidden_size]
-    if weights:
-      syn0, _ = weights
-    else:
-      syn0, _, _ = self.weights
+    syn0, _, _ = self.weights
 
     if self._arch == 'skip_gram':
       inputs_syn0 = tf.gather(syn0, inputs) # [batch_size, hidden_size]
