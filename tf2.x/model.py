@@ -54,20 +54,20 @@ class Word2VecModel(tf.keras.Model):
 
     self._input_size = (self._vocab_size if self._algm == 'negative_sampling'
                             else self._vocab_size - 1)
-
+    tf.random.set_seed(1234)
     self.add_weight('syn0',
                     shape=[self._vocab_size, self._hidden_size],
                     initializer=tf.keras.initializers.RandomUniform(
                         minval=-0.5/self._hidden_size,
                         maxval=0.5/self._hidden_size,
                         seed=self._random_seed))
-
+    tf.random.set_seed(1234)
     self.add_weight('syn1',
                     shape=[self._input_size, self._hidden_size],
                     initializer=tf.keras.initializers.RandomUniform(
                         minval=-0.1, maxval=0.1,
                         seed=self._random_seed))
-
+    tf.random.set_seed(1234)
     self.add_weight('biases',
                     shape=[self._input_size],
                     initializer=tf.keras.initializers.Zeros())
