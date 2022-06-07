@@ -1,6 +1,7 @@
 """Defines word2vec model using tf.keras API.
 """
 import tensorflow as tf
+import numpy as np
 
 from dataset import WordTokenizer
 from dataset import Word2VecDatasetBuilder
@@ -219,7 +220,9 @@ class Word2VecModel(tf.keras.Model):
       loss: float tensor of shape [batch_size, negatives + 1].
     """
     _, syn1, biases = self.weights
-
+    
+    np.random.seed(random_seed)
+    
     sampled_values = tf.random.fixed_unigram_candidate_sampler(
         true_classes=tf.expand_dims(labels, 1),
         num_true=1,
