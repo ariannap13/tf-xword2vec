@@ -263,6 +263,7 @@ class Word2VecDatasetBuilder(object):
             self._index_nnsent += 1
             indices = tf.boolean_mask(indices, tf.not_equal(indices, OOV_ID))
             keep_probs = tf.gather(keep_probs, indices)
+            tf.random.set_seed(1234)
             randvars = tf.random.uniform(
                 tf.shape(keep_probs), 0, 1, seed=seed_nsent)
 
