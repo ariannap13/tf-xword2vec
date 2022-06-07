@@ -22,7 +22,6 @@ class Word2VecModel(tf.keras.Model):
                add_bias=True,
                random_seed=0):
     """Constructor.
-
     Args:
       unigram_counts: a list of ints, the counts of word tokens in the corpus.
       arch: string scalar, architecture ('skip_gram' or 'cbow').
@@ -75,14 +74,12 @@ class Word2VecModel(tf.keras.Model):
 
   def call(self, inputs, labels, random_seed=None, batch_size=None, unigram_counts=None, negatives=None):
     """Runs the forward pass to compute loss.
-
     Args:
       inputs: int tensor of shape [batch_size] (skip_gram) or
         [batch_size, 2*window_size+1] (cbow)
       labels: int tensor of shape [batch_size] (negative_sampling) or
         [batch_size, 2*max_depth+1] (hierarchical_softmax)
       random_seed: chosen random seed for the given inputs-labels pair
-
     Returns:
       loss: float tensor, cross entropy loss.
     """
@@ -96,12 +93,10 @@ class Word2VecModel(tf.keras.Model):
   def _false_loss(self, inputs, labels, vocab_len):
     """Builds the false loss. For every vocab, even for the true context.
     The batch_size is forced as 1 since we are post-training.
-
     Args:
       inputs: int tensor of shape [batch_size] (skip_gram) or
         [batch_size, 2*window_size+1] (cbow)
       labels: int tensor of shape [batch_size]
-
     Returns:
       loss: float tensor of shape [batch_size, vocab_size].
     """
@@ -129,12 +124,10 @@ class Word2VecModel(tf.keras.Model):
 
   def _full_loss(self, inputs, labels, vocab_len):
     """Builds the full loss. The batch_size is forced as 1 since we are post-training.
-
     Args:
       inputs: int tensor of shape [batch_size] (skip_gram) or
         [batch_size, 2*window_size+1] (cbow)
       labels: int tensor of shape [batch_size]
-
     Returns:
       loss: float tensor of shape [batch_size, vocab_size].
     """
@@ -209,20 +202,18 @@ class Word2VecModel(tf.keras.Model):
 
   def _negative_sampling_loss(self, inputs, labels, random_seed, batch_size, unigram_counts, negatives):
     """Builds the loss for negative sampling.
-
     Args:
       inputs: int tensor of shape [batch_size] (skip_gram) or
         [batch_size, 2*window_size+1] (cbow)
       labels: int tensor of shape [batch_size]
       random_seed: chosen random seed for the given inputs-labels pair
-
     Returns:
       loss: float tensor of shape [batch_size, negatives + 1].
     """
     _, syn1, biases = self.weights
-    
-    np.random.seed(random_seed)
-    
+
+    tf.random.set_seed(1234)
+
     sampled_values = tf.random.fixed_unigram_candidate_sampler(
         true_classes=tf.expand_dims(labels, 1),
         num_true=1,
@@ -265,12 +256,10 @@ class Word2VecModel(tf.keras.Model):
 
   def _hierarchical_softmax_loss(self, inputs, labels):
     """Builds the loss for hierarchical softmax.
-
     Args:
       inputs: int tensor of shape [batch_size] (skip_gram) or
         [batch_size, 2*window_size+1] (cbow)
       labels: int tensor of shape [batch_size, 2*max_depth+1]
-
     Returns:
       loss: float tensor of shape [sum_of_code_len]
     """
@@ -301,11 +290,9 @@ class Word2VecModel(tf.keras.Model):
   def _get_inputs_syn0(self, inputs):
     """Builds the activations of hidden layer given input words embeddings
     `syn0` and input word indices.
-
     Args:
       inputs: int tensor of shape [batch_size] (skip_gram) or
         [batch_size, 2*window_size+1] (cbow)
-
     Returns:
       inputs_syn0: [batch_size, hidden_size]
     """
