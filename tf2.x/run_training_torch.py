@@ -58,13 +58,13 @@ log_per_steps= 100
 def train_step(model, opt, inputs, labels):
 
   opt.zero_grad()
-  neg_loss = model._negative_sampling_loss_torch(inputs, labels, word2vec._batch_size, word2vec._unigram_counts, word2vec._negatives)
+  neg_loss = model._negative_sampling_loss_torch(inputs, labels, model._batch_size, model._unigram_counts, model._negatives)
   neg_loss.sum().backward(create_graph = True, retain_graph = True)
 
   opt.step()
 
   return neg_loss
-  
+
 
 average_loss = 0.
 # optimizer

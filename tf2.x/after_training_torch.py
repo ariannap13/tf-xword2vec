@@ -5,6 +5,9 @@ from typing import List, \
     Union
 from dataset_torch import split_given_size
 import os
+import pickle
+from scipy import spatial
+import pandas as pd
 
 def fixed_unigram_candidate_sampler(
     true_classes: Union[np.array, torch.Tensor],
@@ -168,11 +171,6 @@ def _negative_sampling_loss_torch(inputs, labels, batch_size, unigram_counts, ne
           [true_cross_entropy.unsqueeze(1), sampled_cross_entropy], dim=1)
       return loss
 
-def get_key(val):
-  for key, value in vocab.items():
-    if val == value:
-      return key
-
 
 def post_training(k, vocab, inv_vocab, dataset, list_index_weat, loss, weights, diz_gradients, hessian_diz):
   vocab_len = len(vocab)
@@ -214,14 +212,14 @@ def post_training(k, vocab, inv_vocab, dataset, list_index_weat, loss, weights, 
       if i%10==0:
         print(i) # progress
 
-  with open(os.path.join('dict_gradients_'+str(k)+'.pickle'), 'wb') as handle_grad:
+  with open('dict_gradients_'+str(k)+'.pickle', 'wb') as handle_grad:
     pickle.dump(diz_gradients, handle_grad, protocol=pickle.HIGHEST_PROTOCOL)
 
-  with open(os.path.join('dict_hessians_'+str(k)+'.pickle'), 'wb') as handle_hes:
+  with open('dict_hessians_'+str(k)+'.pickle', 'wb') as handle_hes:
     pickle.dump(hessian_diz, handle_hes, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def compute_g(A, B, c, get_emb):
+def compute_g(A, B, c, get_emb, wv):
   """
   compute g measure which is part of effect size.
 
@@ -235,16 +233,16 @@ def compute_g(A, B, c, get_emb):
   mean_cos_a = 0
   mean_cos_b = 0
   for word_a in A:
-    mean_cos_a += 1 - spatial.distance.cosine(get_emb(c), get_emb(word_a))
+    mean_cos_a += 1 - spatial.distance.cosine(get_emb(wv, c), get_emb(wv, word_a))
   mean_cos_a /= len(A)
   for word_b in B:
-    mean_cos_b += 1 - spatial.distance.cosine(get_emb(c), get_emb(word_b))
+    mean_cos_b += 1 - spatial.distance.cosine(get_emb(wv, c), get_emb(wv, word_b))
   mean_cos_b /= len(B)
   g = mean_cos_a - mean_cos_b
   return g
 
 
-def effect_size(S, T, A, B, get_emb):
+def effect_size(S, T, A, B, get_emb, wv):
   """
   Compute effect size.
 
@@ -259,21 +257,21 @@ def effect_size(S, T, A, B, get_emb):
   mean_g_s = 0
   mean_g_t = 0
   for word_s in S:
-    mean_g_s += compute_g(A, B, word_s, get_emb)
+    mean_g_s += compute_g(A, B, word_s, get_emb, wv)
   mean_g_s /= len(S)
   for word_t in T:
-    mean_g_t += compute_g(A, B, word_t, get_emb)
+    mean_g_t += compute_g(A, B, word_t, get_emb, wv)
   mean_g_t /= len(T)
   list_g_x = []
   for word_x in S+T:
-    g_x = compute_g(A, B, word_x, get_emb)
+    g_x = compute_g(A, B, word_x, get_emb, wv)
     list_g_x.append(g_x)
-  std = statistics.stdev(list_g_x)
+  std = np.std(np.array(list_g_x))
   effect_size = (mean_g_s-mean_g_t)/std
   return effect_size
 
 
-def get_emb(wv, word):
+def get_emb_og(wv, word):
     """
     Function allowing to get the embedding of a given word.
 
@@ -322,7 +320,7 @@ def get_full_grad(diz_gradients):
   return diz_grad_full
 
 
-def get_perturbed_emb_sent(wv, sent_text, diz_gradients, hessian_diz, sent_id):
+def get_perturbed_emb_sent(wv, S, T, A, B, most_common_words, sent_text, diz_gradients, hessian_diz, sent_id):
   """
   Function allowing to get the approximate version of embedding of a given word
   though influence functions.
@@ -337,8 +335,8 @@ def get_perturbed_emb_sent(wv, sent_text, diz_gradients, hessian_diz, sent_id):
 
   perturbed_emb = {} # dictionary {word: emb}
   for word in S+T+A+B+most_common_words:
-    emb = get_emb(word)
-    if ' '+word+' ' in sent_text: # single entity
+    emb = get_emb_og(wv, word)
+    if word in sent_text: # single entity
       V = len(wv._vocab)
       if word in diz_grad_sent:
         grad_sent = diz_grad_sent[word] # gradient for the word of interest
@@ -353,7 +351,7 @@ def get_perturbed_emb_sent(wv, sent_text, diz_gradients, hessian_diz, sent_id):
   return perturbed_emb
 
 
-def get_emb_pert(word):
+def get_emb_pert(perturbed_emb, word):
   """
   Apply dictionary to given word to get the embedding.
 
@@ -389,22 +387,22 @@ def get_sim_matrix(S,T,A,B,most_common_words,inv_vocab,get_emb,wv):
   return sim_matrix
 
 
-def get_sim_perturbed(k, data, S, T, A, B, most_common_words, wv, diz_gradients, diz_hessian, get_emb_pert):
+def get_sim_perturbed(k, text, S, T, A, B, most_common_words, wv, diz_gradients, hessian_diz, get_emb_pert):
 
   list_sim_sent = []
   print('k value: ', str(k))
-  for sent_id in range(len(data)):
-    sent_text = data[sent_id][0]+' '
+  for sent_id in range(len(text)):
+    sent_text = text[sent_id]
 
     # check my sentence contains at least one WEAT word, otherwise there is no contribution to the perturbed embedding
     first=True
     for word in S+T+A+B:
-      if ' '+word+' ' in sent_text: # word as single occurrence (not part of another word), eg. otherwise "the" is selected because it contains "he"
+      if word in sent_text: # word as single occurrence (not part of another word), eg. otherwise "the" is selected because it contains "he"
         if first==True: # I consider a sentence if it has at least one occurrence of WEAT words
           # define pertubed embedding
-          perturbed_emb = get_perturbed_emb_sent(wv, sent_text, diz_gradients_0, hessian_diz_0, sent_id)
+          perturbed_emb = get_perturbed_emb_sent(wv, S, T, A, B, most_common_words, sent_text, diz_gradients, hessian_diz, sent_id)
           # effect size perturbed
-          sim_matrix_pert = get_sim_matrix(S, T, A, B, most_common_words, get_emb_pert, wv)
+          sim_matrix_pert = get_sim_matrix(S, T, A, B, most_common_words, get_emb_pert, perturbed_emb)
 
           print("Sentence: ", sent_id, sent_text)
           print("Similarity matrix perturbed corpus:\n", sim_matrix_pert)
@@ -446,24 +444,24 @@ def compute_corr(k, target_set, list_sim_sent, list_sim_sent_retrain):
       print('mean correlation of '+target_set[i]+': ', mean_list[i])
 
 
-def get_variation_sim_matrix(k, data, S, T, A, B, wv, diz_gradients, hessian_diz):
-  print('k value: ', str(k))
-  for sent_id in range(len(data)):
-    sent_text = data[sent_id][0]+' '
+def get_variation_sim_matrix(k, text, S, T, A, B, wv, diz_gradients, hessian_diz, sim_matrix_full):
+    print('k value: ', str(k))
+    for sent_id in range(len(text)):
+        sent_text = text[sent_id]
 
-    # check my sentence contains at least one WEAT word, otherwise there is no contribution to the perturbed embedding
-    first=True
-    for word in S+T+A+B:
-      if ' '+word+' ' in sent_text: # word as single occurrence (not part of another word), eg. otherwise "the" is selected because it contains "he"
-        if first==True: # I consider a sentence if it has at least one occurrence of WEAT words
-          # define pertubed embedding
-          perturbed_emb = get_perturbed_emb_sent(wv, sent_text, diz_gradients, hessian_diz, sent_id)
+        # check my sentence contains at least one WEAT word, otherwise there is no contribution to the perturbed embedding
+        first=True
+        for word in S+T+A+B:
+          if word in sent_text: # word as single occurrence (not part of another word), eg. otherwise "the" is selected because it contains "he"
+            if first==True: # I consider a sentence if it has at least one occurrence of WEAT words
+              # define pertubed embedding
+              perturbed_emb = get_perturbed_emb_sent(wv, S, T, A, B, [], sent_text, diz_gradients, hessian_diz, sent_id)
 
-          # effect size perturbed
-          sim_matrix_pert = get_sim_matrix(S, T, A, B, [], get_emb_pert, wv)
-          #print(sim_matrix_pert)
+              # effect size perturbed
+              sim_matrix_pert = get_sim_matrix(S, T, A, B, [], get_emb_pert, perturbed_emb)
+              #print(sim_matrix_pert)
 
-          print("Sentence: ", sent_id, sent_text)
-          print("Diff. similarity matrices:\n", sim_matrix_pert - sim_matrix_full)
+              print("Sentence: ", sent_id, sent_text)
+              print("Diff. similarity matrices:\n", sim_matrix_pert - sim_matrix_full)
 
-          first=False
+              first=False
