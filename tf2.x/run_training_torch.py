@@ -24,7 +24,7 @@ import collections
 from dataset_torch import create_skipgram
 from model_torch import Word2VecModel
 
-BATCH_SIZE = 5
+BATCH_SIZE = 32
 NEGATIVES = 5
 EPOCHS = 2
 SAMPLING_RATE = 1E-3
@@ -40,7 +40,7 @@ B = ["woman", "she", "her"]
 WEATLIST = S+T+A+B
 
 text = []
-with open('/content/nyt_articles_31.txt', 'r') as f:
+with open('nyt_articles_31.txt', 'r') as f:
   text = [nltk.tokenize.word_tokenize(x.strip()) for x in f.readlines()]
 
 

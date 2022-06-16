@@ -8,6 +8,7 @@ import os
 import pickle
 from scipy import spatial
 import pandas as pd
+import scipy
 
 def fixed_unigram_candidate_sampler(
     true_classes: Union[np.array, torch.Tensor],
@@ -40,7 +41,7 @@ def fixed_unigram_candidate_sampler(
     return result
 
 
-def _full_loss_torch(input, label, vocab_len, weights=None):
+def _full_loss_torch(input, label, batch_size, unigram_counts, negatives, weights, vocab_len):
   """Builds the full loss. The batch_size is forced as 1 since we are post-training.
 
   Args:
@@ -84,7 +85,7 @@ def _full_loss_torch(input, label, vocab_len, weights=None):
   return loss
 
 
-def _true_loss_torch(input, label, vocab_len, weights=None):
+def _true_loss_torch(input, label, batch_size, unigram_counts, negatives, weights, vocab_len):
   """Builds the true loss. The batch_size is forced as 1 since we are post-training.
 
   Args:
@@ -114,7 +115,7 @@ def _true_loss_torch(input, label, vocab_len, weights=None):
   return loss
 
 
-def _negative_sampling_loss_torch(inputs, labels, batch_size, unigram_counts, negatives, weights):
+def _negative_sampling_loss_torch(input, label, batch_size, unigram_counts, negatives, weights, vocab_len):
       """Builds the negative sampling loss.
 
       Args:
@@ -132,8 +133,8 @@ def _negative_sampling_loss_torch(inputs, labels, batch_size, unigram_counts, ne
       syn0 = weights[0]
       syn1 = weights[1]
 
-      torch.manual_seed(np.array(inputs).mean())
-      true_classes_array = torch.unsqueeze(torch.tensor(np.repeat(labels, negatives)), 1)
+      torch.manual_seed(np.array(input).mean())
+      true_classes_array = torch.unsqueeze(torch.tensor(np.repeat(label, negatives)), 1)
       #print(true_classes_array.shape)
       sampled_values = fixed_unigram_candidate_sampler(true_classes = true_classes_array,
                                                         num_samples = negatives*batch_size,
@@ -144,8 +145,8 @@ def _negative_sampling_loss_torch(inputs, labels, batch_size, unigram_counts, ne
       sampled_values = torch.from_numpy(sampled_values)
       #sampled_mat = torch.reshape(sampled_values, (batch_size, negatives))
 
-      inputs_syn0 = torch.index_select(syn0, 0, torch.from_numpy(np.array(inputs)))
-      true_syn1 = torch.index_select(syn1, 0, torch.from_numpy(np.array(labels)))
+      inputs_syn0 = torch.index_select(syn0, 0, torch.from_numpy(np.array(input)))
+      true_syn1 = torch.index_select(syn1, 0, torch.from_numpy(np.array(label)))
 
       #sampled_syn1 = syn1[sampled_values]
       list_sampled_syn1 = []
@@ -172,7 +173,7 @@ def _negative_sampling_loss_torch(inputs, labels, batch_size, unigram_counts, ne
       return loss
 
 
-def post_training(k, vocab, inv_vocab, dataset, list_index_weat, loss, weights, diz_gradients, hessian_diz):
+def post_training(k, vocab, inv_vocab, dataset, batch_size, unigram_counts, negatives, list_index_weat, loss_func, weights, diz_gradients, hessian_diz):
   vocab_len = len(vocab)
   i = 0
   for step, training_point in enumerate(dataset):
@@ -181,9 +182,10 @@ def post_training(k, vocab, inv_vocab, dataset, list_index_weat, loss, weights, 
       input = training_point[0][0]
       label = training_point[0][1]
       nsent = training_point[0][2]
-      true_loss = _true_loss_torch(input, label, vocab_len, weights)
-      true_loss.sum().backward(inputs=weights[0], create_graph=True, retain_graph=True)
-      grad = torch.autograd.grad(true_loss.sum(), weights[0], create_graph=True, retain_graph=True)[0]
+
+      loss = loss_func(input, label, batch_size, unigram_counts, negatives, weights, vocab_len)
+      loss.sum().backward(inputs=weights[0], create_graph=True, retain_graph=True)
+      grad = torch.autograd.grad(loss.sum(), weights[0], create_graph=True, retain_graph=True)[0]
 
       hessian = []
       for w in grad[input]:
@@ -387,7 +389,7 @@ def get_sim_matrix(S,T,A,B,most_common_words,inv_vocab,get_emb,wv):
   return sim_matrix
 
 
-def get_sim_perturbed(k, text, S, T, A, B, most_common_words, wv, diz_gradients, hessian_diz, get_emb_pert):
+def get_sim_perturbed(k, text, S, T, A, B, most_common_words, wv, diz_gradients, hessian_diz, get_emb_pert, inv_vocab):
 
   list_sim_sent = []
   print('k value: ', str(k))
@@ -402,7 +404,7 @@ def get_sim_perturbed(k, text, S, T, A, B, most_common_words, wv, diz_gradients,
           # define pertubed embedding
           perturbed_emb = get_perturbed_emb_sent(wv, S, T, A, B, most_common_words, sent_text, diz_gradients, hessian_diz, sent_id)
           # effect size perturbed
-          sim_matrix_pert = get_sim_matrix(S, T, A, B, most_common_words, get_emb_pert, perturbed_emb)
+          sim_matrix_pert = get_sim_matrix(S, T, A, B, most_common_words, inv_vocab, get_emb_pert, perturbed_emb)
 
           print("Sentence: ", sent_id, sent_text)
           print("Similarity matrix perturbed corpus:\n", sim_matrix_pert)
@@ -423,7 +425,7 @@ def compute_corr(k, target_set, list_sim_sent, list_sim_sent_retrain):
   print("Num. of k: ", str(k))
   mean_list = []
   for target in target_set:
-     mean_list.append(0)
+     mean_list.append(0.)
   mean_list = np.array(mean_list)
   for sent in list_sim_sent:
     sent_id = sent[0]
@@ -431,8 +433,13 @@ def compute_corr(k, target_set, list_sim_sent, list_sim_sent_retrain):
       if sent_id == sent_retrain[0]:
         corr = []
         for i in range(len(target_set)):
-            corr.append(scipy.stats.pearsonr(np.array(sent[1][i]),
-                                            np.array(sent_retrain[1][i]))[0])
+          indexs = np.argwhere(np.isnan(sent_retrain[1][i]))
+          new_sent_retrain = np.delete(sent_retrain[1][i], indexs)
+          new_sent_approx = np.delete(sent[1][i], indexs)
+
+          corr.append(scipy.stats.pearsonr(np.array(new_sent_approx), np.array(new_sent_retrain))[0])
+
+
         mean_list += np.array(corr)
         print('num. sent: ', sent_id)
         for i in range(len(target_set)):
@@ -444,11 +451,11 @@ def compute_corr(k, target_set, list_sim_sent, list_sim_sent_retrain):
       print('mean correlation of '+target_set[i]+': ', mean_list[i])
 
 
-def get_variation_sim_matrix(k, text, S, T, A, B, wv, diz_gradients, hessian_diz, sim_matrix_full):
+def get_variation_sim_matrix(k, text, S, T, A, B, wv, diz_gradients, hessian_diz, sim_matrix_full, vocab):
     print('k value: ', str(k))
     for sent_id in range(len(text)):
         sent_text = text[sent_id]
-
+        print()
         # check my sentence contains at least one WEAT word, otherwise there is no contribution to the perturbed embedding
         first=True
         for word in S+T+A+B:
@@ -458,7 +465,7 @@ def get_variation_sim_matrix(k, text, S, T, A, B, wv, diz_gradients, hessian_diz
               perturbed_emb = get_perturbed_emb_sent(wv, S, T, A, B, [], sent_text, diz_gradients, hessian_diz, sent_id)
 
               # effect size perturbed
-              sim_matrix_pert = get_sim_matrix(S, T, A, B, [], get_emb_pert, perturbed_emb)
+              sim_matrix_pert = get_sim_matrix(S, T, A, B, [], vocab, get_emb_pert, perturbed_emb)
               #print(sim_matrix_pert)
 
               print("Sentence: ", sent_id, sent_text)

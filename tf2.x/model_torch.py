@@ -63,12 +63,12 @@ class Word2VecModel(torch.nn.Module):
       # syn0
       torch.manual_seed(self._random_seed)
       syn0 = torch.empty(self._vocab_size, self._hidden_size)
-      self.syn0 = torch.nn.Parameter(data=torch.nn.init.uniform_(syn0, a=0.1, b=1), requires_grad=True)
+      self.syn0 = torch.nn.Parameter(data=torch.nn.init.uniform_(syn0, a=(-0.5/self._hidden_size), b=(0.5/self._hidden_size)), requires_grad=True)
 
       # syn1
       torch.manual_seed(self._random_seed)
       syn1 = torch.empty(self._input_size, self._hidden_size)
-      self.syn1 = torch.nn.Parameter(data=torch.nn.init.uniform_(syn1, a=0.1, b=1), requires_grad=True)
+      self.syn1 = torch.nn.Parameter(data=torch.nn.init.uniform_(syn1, a=-0.1, b=0.1), requires_grad=True)
 
 
     def forward(self, inputs, labels, batch_size, unigram_counts, negatives, weights):
