@@ -4,6 +4,7 @@ import torch.utils.data
 from typing import List, \
     Union
 from dataset_torch import split_given_size
+import os
 
 def fixed_unigram_candidate_sampler(
     true_classes: Union[np.array, torch.Tensor],
@@ -362,7 +363,7 @@ def get_emb_pert(word):
   return perturbed_emb[word]
 
 
-def get_sim_matrix(S,T,A,B,most_common_words,inv_vocab,get_emb):
+def get_sim_matrix(S,T,A,B,most_common_words,inv_vocab,get_emb,wv):
   """
   Get similarity matrix for target and attribute sets.
 
@@ -377,7 +378,7 @@ def get_sim_matrix(S,T,A,B,most_common_words,inv_vocab,get_emb):
     list_cossim = []
     for attr_word in A+B+most_common_words:
       if attr_word in inv_vocab and target_word in inv_vocab:
-        list_cossim.append(1 - spatial.distance.cosine(get_emb(target_word), get_emb(attr_word)))
+        list_cossim.append(1 - spatial.distance.cosine(get_emb(wv, target_word), get_emb(wv, attr_word)))
       else:
         list_cossim.append(np.nan)
     sim_matrix_list.append(list_cossim)
@@ -403,7 +404,7 @@ def get_sim_perturbed(k, data, S, T, A, B, most_common_words, wv, diz_gradients,
           # define pertubed embedding
           perturbed_emb = get_perturbed_emb_sent(wv, sent_text, diz_gradients_0, hessian_diz_0, sent_id)
           # effect size perturbed
-          sim_matrix_pert = get_sim_matrix(S, T, A, B, most_common_words, get_emb_pert)
+          sim_matrix_pert = get_sim_matrix(S, T, A, B, most_common_words, get_emb_pert, wv)
 
           print("Sentence: ", sent_id, sent_text)
           print("Similarity matrix perturbed corpus:\n", sim_matrix_pert)
@@ -459,7 +460,7 @@ def get_variation_sim_matrix(k, data, S, T, A, B, wv, diz_gradients, hessian_diz
           perturbed_emb = get_perturbed_emb_sent(wv, sent_text, diz_gradients, hessian_diz, sent_id)
 
           # effect size perturbed
-          sim_matrix_pert = get_sim_matrix(S, T, A, B, [], get_emb_pert)
+          sim_matrix_pert = get_sim_matrix(S, T, A, B, [], get_emb_pert, wv)
           #print(sim_matrix_pert)
 
           print("Sentence: ", sent_id, sent_text)
