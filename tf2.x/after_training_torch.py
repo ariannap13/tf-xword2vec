@@ -429,7 +429,7 @@ def compute_corr(k, target_set, list_sim_sent, list_sim_sent_retrain):
   for sent in list_sim_sent:
     sent_id = sent[0]
     for sent_retrain in list_sim_sent_retrain:
-      if sent_id == sent_retrain[0]
+      if sent_id == sent_retrain[0]:
         corr = []
         for i in range(len(target_set)):
             corr.append(scipy.stats.pearsonr(np.array(sent[1][i]),
