@@ -173,7 +173,7 @@ def get_key(val):
       return key
 
 
-def post_training(k, vocab, dataset, list_index_weat, loss, weights, diz_gradients, hessian_diz):
+def post_training(k, vocab, inv_vocab, dataset, list_index_weat, loss, weights, diz_gradients, hessian_diz):
   vocab_len = len(vocab)
   i = 0
   for step, training_point in enumerate(dataset):
