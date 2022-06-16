@@ -272,14 +272,14 @@ def effect_size(S, T, A, B, get_emb):
   return effect_size
 
 
- def get_emb(wv, word):
-	"""
-	Function allowing to get the embedding of a given word.
+def get_emb(wv, word):
+    """
+    Function allowing to get the embedding of a given word.
 
-	word: word of interest
-	return: word embedding
-	"""
-	return wv._syn0_final[wv._rev_vocab[word]]
+    word: word of interest
+    return: word embedding
+    """
+    return wv._syn0_final[wv._rev_vocab[word]]
 
 
 def get_sent_grad(diz_gradients, sent_id):
@@ -303,7 +303,7 @@ def get_sent_grad(diz_gradients, sent_id):
   return diz_grad_sent
 
 
- def get_full_grad(diz_gradients):
+def get_full_grad(diz_gradients):
   """
   Computes the full gradient by aggregating the values in diz_gradients.
 
@@ -321,7 +321,7 @@ def get_sent_grad(diz_gradients, sent_id):
   return diz_grad_full
 
 
- def get_perturbed_emb_sent(wv, sent_text, diz_gradients, hessian_diz, sent_id):
+def get_perturbed_emb_sent(wv, sent_text, diz_gradients, hessian_diz, sent_id):
   """
   Function allowing to get the approximate version of embedding of a given word
   though influence functions.
@@ -352,7 +352,7 @@ def get_sent_grad(diz_gradients, sent_id):
   return perturbed_emb
 
 
- def get_emb_pert(word):
+def get_emb_pert(word):
   """
   Apply dictionary to given word to get the embedding.
 
@@ -362,7 +362,7 @@ def get_sent_grad(diz_gradients, sent_id):
   return perturbed_emb[word]
 
 
- def get_sim_matrix(S,T,A,B,most_common_words,inv_vocab,get_emb):
+def get_sim_matrix(S,T,A,B,most_common_words,inv_vocab,get_emb):
   """
   Get similarity matrix for target and attribute sets.
 
@@ -388,7 +388,7 @@ def get_sent_grad(diz_gradients, sent_id):
   return sim_matrix
 
 
- def get_sim_perturbed(k, data, S, T, A, B, most_common_words, wv, diz_gradients, diz_hessian, get_emb_pert):
+def get_sim_perturbed(k, data, S, T, A, B, most_common_words, wv, diz_gradients, diz_hessian, get_emb_pert):
 
   list_sim_sent = []
   print('k value: ', str(k))
@@ -420,7 +420,7 @@ def get_sent_grad(diz_gradients, sent_id):
   return list_sim_sent
 
 
- def compute_corr(k, target_set, list_sim_sent, list_sim_sent_retrain):
+def compute_corr(k, target_set, list_sim_sent, list_sim_sent_retrain):
   print("Num. of k: ", str(k))
   mean_list = []
   for target in target_set:
